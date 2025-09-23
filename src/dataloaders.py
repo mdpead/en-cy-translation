@@ -12,10 +12,6 @@ class TokenSampler(BatchSampler):
         self.batches = self.generate_batches(ds)
 
     def generate_batches(self, ds):
-        ds = ds.map(
-            lambda row, idx: {"en_token_length": len(row["text_en_tokenized"]), "idx": idx},
-            with_indices=True,
-        )
 
         # Create batches based on token counts
         lengths = list(zip(ds["idx"], ds["en_token_length"]))
@@ -38,15 +34,16 @@ class TokenSampler(BatchSampler):
     def __iter__(self):
         # Shuffle batches to introduce randomness
         rng = random.Random(SEED)
-        batches = rng.sample(self.batches, len(self.batches))
-        for batch in batches:
-            yield batch
+        while True:
+            batches = rng.sample(self.batches, len(self.batches))
+            for batch in batches:
+                yield batch
 
     def __len__(self):
         return len(self.batches)
 
 
-def collate_batch(batch, pad_token_id=3):
+def collate_batch(batch, pad_token_id):
 
     output = {}
     for type in ["src", "tgt"]:
@@ -62,6 +59,7 @@ def collate_batch(batch, pad_token_id=3):
 
     output["tgt_output_ids"] = output["tgt_input_ids"][:, 1:].contiguous()
     output["tgt_input_ids"] = output["tgt_input_ids"][:, :-1].contiguous()
+    output["tgt_padding_mask"] = output["tgt_padding_mask"][:, :-1].contiguous()
 
     return output
 
@@ -78,5 +76,6 @@ def create_dataloaders(
             ds[split],
             batch_sampler=TokenSampler(ds[split], token_batch_size),
             collate_fn=lambda x: collate_batch(x, pad_token_id=pad_token_id),
+            pin_memory=True,
         )
     return dataloaders

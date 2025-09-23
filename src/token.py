@@ -59,6 +59,29 @@ def tokenize_text(text, tokenizers):
     return texts_tokenized
 
 
-def tokenize_dataset(ds, tokenizers):
+def tokenize_dataset(ds, tokenizers, max_length):
     ds = ds.map(lambda x: tokenize_text(x, tokenizers), batched=True, batch_size=100000)
+    ds = ds.map(
+        lambda row, idx: {
+            "en_token_length": len(row["text_en_tokenized"]),
+            "cy_token_length": len(row["text_cy_tokenized"]),
+            "idx": idx,
+        },
+        with_indices=True,
+    )
+    ds = ds.filter(
+        lambda x: (x["en_token_length"] <= max_length) and (x["cy_token_length"] <= max_length)
+    )
     return ds
+
+
+def save_tokenizers(tokenizers, path):
+    tokenizers["en"].save_pretrained(f"{path}/tokenizer_en")
+    tokenizers["cy"].save_pretrained(f"{path}/tokenizer_cy")
+    return None
+
+
+def load_tokenizers(path):
+    tokenizer_en = PreTrainedTokenizerFast.from_pretrained(f"{path}/tokenizer_en")
+    tokenizer_cy = PreTrainedTokenizerFast.from_pretrained(f"{path}/tokenizer_cy")
+    return {"en": tokenizer_en, "cy": tokenizer_cy}
