@@ -66,16 +66,17 @@ def collate_batch(batch, pad_token_id):
 
 def create_dataloaders(
     ds,
-    tokenizers,
-    token_batch_size,
+    config,
 ):
-    pad_token_id = tokenizers["en"].pad_token_id
+
     dataloaders = {}
     for split in ["train", "test"]:
         dataloaders[split] = DataLoader(
             ds[split],
-            batch_sampler=TokenSampler(ds[split], token_batch_size),
-            collate_fn=lambda x: collate_batch(x, pad_token_id=pad_token_id),
+            batch_sampler=TokenSampler(ds[split], config["train"]["minibatch_token_size"]),
+            collate_fn=lambda x: collate_batch(
+                x, pad_token_id=config["tokenizers"]["pad_token_id"]
+            ),
             pin_memory=True,
         )
     return dataloaders

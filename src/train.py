@@ -3,8 +3,6 @@ from torch import nn
 from torch.optim.lr_scheduler import LRScheduler
 import logging
 import time
-import os
-import datetime
 import json
 from torch.optim import Optimizer
 from torch import amp
@@ -34,9 +32,13 @@ class WarmupInverseSquareRootLR(LRScheduler):
         return lrs
 
 
+def validation_step(dataloaders):
+    return None
+
+
 def train_loop(
     model,
-    dataloader,
+    dataloaders,
     criterion,
     optimiser,
     lr_scheduler,
@@ -57,7 +59,7 @@ def train_loop(
     start_time = time.time()
     total_loss = 0.0
     model.train()
-    for batch_idx, batch in enumerate(dataloader["train"]):
+    for batch_idx, batch in enumerate(dataloaders["train"]):
 
         # Move batch to device
         batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
@@ -130,15 +132,9 @@ def train_loop(
     return results
 
 
-def train(model, dataloader, config):
+def train(model, dataloaders, model_dir, config):
 
     train_config = config["train"]
-
-    # Set up saving directory and config
-    model_dir = f"{train_config['models_dir']}/{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    if not os.path.exists(model_dir):
-        os.mkdir(model_dir)
-    json.dump(config, open(f"{model_dir}/config.json", "w"))
 
     # Move model to device
     device = torch.device(train_config["device"])
@@ -151,7 +147,7 @@ def train(model, dataloader, config):
     criterion = nn.CrossEntropyLoss(
         reduction="mean",
         label_smoothing=train_config["label_smoothing"],
-        ignore_index=train_config["pad_token_id"],
+        ignore_index=config["tokenizers"]["pad_token_id"],
     )
 
     optimiser = torch.optim.AdamW(
@@ -172,12 +168,12 @@ def train(model, dataloader, config):
 
     results = train_loop(
         model,
-        dataloader,
+        dataloaders,
         criterion,
         optimiser,
         lr_scheduler,
         train_config["num_steps"],
-        train_config["pad_token_id"],
+        config["tokenizers"]["pad_token_id"],
         grad_accum_steps,
         device,
         train_config["checkpoint_steps"],
