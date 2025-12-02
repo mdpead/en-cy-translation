@@ -49,39 +49,23 @@ def create_tokenizers(ds):
     return {"en": english_tokenizer, "cy": welsh_tokenizer}
 
 
-def tokenize_text(text, tokenizers):
-    texts_tokenized = {}
-    for lang in ["en", "cy"]:
-        text_tokenized = tokenizers[lang](
-            text[f"text_{lang}"],
-        )
-        texts_tokenized[f"text_{lang}_tokenized"] = text_tokenized["input_ids"]
-    return texts_tokenized
-
-
-def tokenize_dataset(ds, tokenizers, max_length):
-    ds = ds.map(lambda x: tokenize_text(x, tokenizers), batched=True, batch_size=100000)
-    ds = ds.map(
-        lambda row, idx: {
-            "en_token_length": len(row["text_en_tokenized"]),
-            "cy_token_length": len(row["text_cy_tokenized"]),
-            "idx": idx,
-        },
-        with_indices=True,
-    )
-    ds = ds.filter(
-        lambda x: (x["en_token_length"] <= max_length) and (x["cy_token_length"] <= max_length)
-    )
-    return ds
-
-
-def save_tokenizers(tokenizers, path):
-    tokenizers["en"].save_pretrained(f"{path}/tokenizer_en")
-    tokenizers["cy"].save_pretrained(f"{path}/tokenizer_cy")
+def save_tokenizers(tokenizers, tokenizers_dir):
+    tokenizers["en"].save_pretrained(f"{tokenizers_dir}/tokenizer_en")
+    tokenizers["cy"].save_pretrained(f"{tokenizers_dir}/tokenizer_cy")
     return None
 
 
-def load_tokenizers(path):
-    tokenizer_en = PreTrainedTokenizerFast.from_pretrained(f"{path}/tokenizer_en")
-    tokenizer_cy = PreTrainedTokenizerFast.from_pretrained(f"{path}/tokenizer_cy")
+def load_tokenizers(tokenizers_dir):
+    tokenizer_en = PreTrainedTokenizerFast.from_pretrained(f"{tokenizers_dir}/tokenizer_en")
+    tokenizer_cy = PreTrainedTokenizerFast.from_pretrained(f"{tokenizers_dir}/tokenizer_cy")
     return {"en": tokenizer_en, "cy": tokenizer_cy}
+
+
+def get_tokenizers(ds, config):
+    tokenizers_config = config["tokenizers"]
+    if tokenizers_config["build"]:
+        tokenizers = create_tokenizers(ds)
+        save_tokenizers(tokenizers, tokenizers_config["tokenizers_dir"])
+    else:
+        tokenizers = load_tokenizers(tokenizers_config["tokenizers_dir"])
+    return tokenizers

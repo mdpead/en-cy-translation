@@ -235,18 +235,18 @@ class Transformer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def encode(self, src, src_padding_mask):
-        src_enc = self.encoder(src, src_padding_mask)
+        src_emb = self.dropout(self.positional_encoder((self.src_embedding(src))))
+        src_enc = self.encoder(src_emb, src_padding_mask)
         return src_enc
 
     def decode(self, src_enc, tgt, src_padding_mask, tgt_padding_mask):
-        tgt_dec = self.decoder(src_enc, tgt, src_padding_mask, tgt_padding_mask)
+        tgt_emb = self.dropout(self.positional_encoder(self.tgt_embedding(tgt)))
+        tgt_dec = self.decoder(src_enc, tgt_emb, src_padding_mask, tgt_padding_mask)
         return tgt_dec
 
     def forward(self, src, tgt, src_padding_mask, tgt_padding_mask):
-        src_emb = self.dropout(self.positional_encoder((self.src_embedding(src))))
-        src_enc = self.encode(src_emb, src_padding_mask)
-        tgt_emb = self.dropout(self.positional_encoder(self.tgt_embedding(tgt)))
-        tgt_dec = self.decode(src_enc, tgt_emb, src_padding_mask, tgt_padding_mask)
+        src_enc = self.encode(src, src_padding_mask)
+        tgt_dec = self.decode(src_enc, tgt, src_padding_mask, tgt_padding_mask)
         out = self.output(tgt_dec)
         return out
 
@@ -260,7 +260,10 @@ def init_weights(m):
         nn.init.normal_(m.E, mean=0.0, std=0.02)
 
 
-def build_transformer(model_config):
+def build_transformer(config):
+
+    model_config = config["model"]
+
     transformer = Transformer(
         model_config["d_model"],
         model_config["num_heads"],
