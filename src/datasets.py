@@ -25,7 +25,7 @@ def get_train_dataset(config):
     if data_config["build"]:
         ds = download_dataset(data_config["train_ds"])
         ds = preprocess_train_ds(ds, data_config["test_split_ratio"])
-        ds.save_to_disk(f"{data_config["data_dir"]}/ds_raw")
+        ds.save_to_disk(f"{data_config['data_dir']}/ds_raw")
     else:
         ds = hf_datasets.load_from_disk(data_config["data_dir"] + "/ds_raw")
     return ds
@@ -65,7 +65,7 @@ def get_tokenized_dataset(ds, tokenizers, config):
     data_config = config["data"]
     if data_config["build"]:
         ds_tokenized = tokenize_dataset(ds, tokenizers, data_config["max_length"])
-        ds_tokenized.save_to_disk(f"{data_config["data_dir"]}/ds_tokenized")
+        ds_tokenized.save_to_disk(f"{data_config['data_dir']}/ds_tokenized")
     else:
         ds_tokenized = hf_datasets.load_from_disk(data_config["data_dir"] + "/ds_tokenized")
     return ds_tokenized

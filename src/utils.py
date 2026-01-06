@@ -14,27 +14,27 @@ def create_model_dir(models_dir):
     return model_dir
 
 
-def save_config(models_dir, model_dir, config):
-    filepath = f"{models_dir}/{model_dir}/config.json"
+def save_config(model_dir, config):
+    filepath = f"{model_dir}/config.json"
     json.dump(config, open(filepath, "w"))
     return filepath
 
 
-def load_config(models_dir, model_dir):
-    filepath = f"{models_dir}/{model_dir}/config.json"
+def load_config(model_dir):
+    filepath = f"{model_dir}/config.json"
     with open(filepath) as f:
         config = json.load(f)
     return config
 
 
-def save_results(models_dir, model_dir, config):
-    filepath = f"{models_dir}/{model_dir}/results.json"
+def save_results(model_dir, config):
+    filepath = f"{model_dir}/results.json"
     json.dump(config, open(filepath, "w"))
     return filepath
 
 
-def load_results(models_dir, model_dir):
-    filepath = f"{models_dir}/{model_dir}/results.json"
+def load_results(model_dir):
+    filepath = f"{model_dir}/results.json"
     with open(filepath) as f:
         config = json.load(f)
     return config
@@ -44,12 +44,12 @@ def create_run(config):
     models_dir = config["train"]["models_dir"]
     model_dir = create_model_dir(config["train"]["models_dir"])
     config["train"]["model_dir"] = model_dir
-    save_config(models_dir, model_dir, config)
+    save_config(model_dir, config)
     return config
 
 
-def load_config(models_dir, model_dir):
-    filepath = f"{models_dir}/{model_dir}/config.json"
+def load_config(model_dir):
+    filepath = f"{model_dir}/config.json"
     with open(filepath) as f:
         config = json.load(f)
     return config
@@ -64,7 +64,7 @@ def load_run(config):
         model_dirs.sort()
         model_dir = model_dirs[-1]
 
-    config_loaded = load_config(models_dir, model_dir)
+    config_loaded = load_config(model_dir)
     if config != config_loaded:
         logging.warning("Warning: Loaded config differs from current config, using loaded config.")
         config = config_loaded

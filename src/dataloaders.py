@@ -61,6 +61,9 @@ def collate_batch(batch, pad_token_id):
     output["tgt_input_ids"] = output["tgt_input_ids"][:, :-1].contiguous()
     output["tgt_padding_mask"] = output["tgt_padding_mask"][:, :-1].contiguous()
 
+    output['src_text'] = [item['text_en'] for item in batch]
+    output['tgt_text'] = [item['text_cy'] for item in batch]
+
     return output
 
 

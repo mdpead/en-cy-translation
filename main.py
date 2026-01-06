@@ -1,7 +1,5 @@
 from src import datasets, token, dataloaders, model, train, utils, generation
-import torch
 import logging
-import datasets as hf_datasets
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,18 +16,20 @@ config = {
     },
     "train": {
         "effective_batch_token_size": 20000,
-        "minibatch_token_size": 512,
+        "minibatch_token_size": 1024,
         "learning_rate": 1e-4,  # 1 / (D_MODEL * WARM_UP_STEPS) ** 0.5
         "adam_betas": (0.9, 0.98),
         "adam_eps": 1e-9,
         "num_steps": 3000,
         "label_smoothing": 0.1,
         "device": "cuda",
-        "checkpoint_steps": 500,
+        "checkpoint_steps": 10,
         "warm_up_steps": 50,
         "models_dir": "./models",
-        "resume": True,
+        "resume": False,
         "model_dir": None,
+        "validation_steps": 2,
+        "validation_accum_steps": 10
     },
     "data": {
         "train_ds": "techiaith/cardiff-university-tm-en-cy",
@@ -54,7 +54,6 @@ config = {
 }
 
 # Set up saving directory and config
-model_dir = utils.set_up_run(config)
 
 ds = datasets.get_train_dataset(config)
 
@@ -66,8 +65,7 @@ dataloader = dataloaders.create_dataloaders(ds_tokenized, config)
 
 transformer = model.build_transformer(config)
 
-
-results = train.train(transformer, dataloader, model_dir, config)
+results = train.train(transformer, dataloader, tokenizers, config)
 
 test = generation.generate_texts(
     transformer, tokenizers, input_texts=["This is a test sentence."], max_length=50, device="cuda"
