@@ -4,13 +4,12 @@ from tokenizers import normalizers
 from tokenizers import decoders
 from transformers import PreTrainedTokenizerFast
 import itertools
+import os
+from src import utils
+import json
 
 
-VOCAB_SIZE = 10000
-TOKENIZER_TRAINING_SIZE = 100000
-
-
-def create_tokenizer(text):
+def create_tokenizer(text, tokenizers_config):
     tokenizer = Tokenizer(models.WordPiece(unk_token="[UNK]"))
     tokenizer.normalizer = normalizers.Sequence(
         [normalizers.NFD(), normalizers.Lowercase(), normalizers.StripAccents()]
@@ -20,8 +19,10 @@ def create_tokenizer(text):
     )
     special_tokens = ["[BOS]", "[EOS]", "[PAD]", "[MASK]", "[UNK]"]
     tokenizer.model = models.WordPiece(unk_token="[UNK]")
-    trainer = trainers.WordPieceTrainer(vocab_size=VOCAB_SIZE, special_tokens=special_tokens)
-    train_iter = itertools.islice(text, TOKENIZER_TRAINING_SIZE)
+    trainer = trainers.WordPieceTrainer(
+        vocab_size=tokenizers_config["vocab_size"], special_tokens=special_tokens
+    )
+    train_iter = itertools.islice(text, tokenizers_config["training_size"])
     tokenizer.train_from_iterator(train_iter, trainer)
     tokenizer.post_processor = processors.TemplateProcessing(
         single="[BOS] $A [EOS]",
@@ -43,9 +44,9 @@ def create_tokenizer(text):
     return pretrained_tokenizer
 
 
-def create_tokenizers(ds):
-    english_tokenizer = create_tokenizer(text=ds["train"]["text_en"])
-    welsh_tokenizer = create_tokenizer(text=ds["train"]["text_cy"])
+def create_tokenizers(ds, tokenizers_config):
+    english_tokenizer = create_tokenizer(ds["train"]["text_en"], tokenizers_config)
+    welsh_tokenizer = create_tokenizer(ds["train"]["text_cy"], tokenizers_config)
     return {"en": english_tokenizer, "cy": welsh_tokenizer}
 
 
@@ -61,11 +62,17 @@ def load_tokenizers(tokenizers_dir):
     return {"en": tokenizer_en, "cy": tokenizer_cy}
 
 
-def get_tokenizers(ds, config):
+def get_tokenizers(ds, ds_hash, config):
     tokenizers_config = config["tokenizers"]
-    if tokenizers_config["build"]:
-        tokenizers = create_tokenizers(ds)
-        save_tokenizers(tokenizers, tokenizers_config["tokenizers_dir"])
+    tokenizers_config_resolved = {**tokenizers_config, "datasets_raw_hash": ds_hash}
+    tokenizers_hash = utils.fingerprint(tokenizers_config_resolved)
+    tokenizers_path = f"{config['locations']['tokenizers_dir']}/{tokenizers_hash}"
+    if os.path.exists(tokenizers_path):
+        tokenizers = load_tokenizers(tokenizers_path)
     else:
-        tokenizers = load_tokenizers(tokenizers_config["tokenizers_dir"])
-    return tokenizers
+        tokenizers = create_tokenizers(ds, tokenizers_config)
+        save_tokenizers(tokenizers, tokenizers_path)
+        with open(tokenizers_path + "/config.json", "w") as f:
+            json.dump(tokenizers_config_resolved, f, indent=2)
+
+    return tokenizers, tokenizers_hash
