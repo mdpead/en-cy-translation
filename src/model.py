@@ -29,6 +29,17 @@ class PositionWiseFeedForward(nn.Module):
         return x
 
 
+class MixtureOfExpertsFeedForward(nn.Module):
+    def __init__(self, d_model, d_ff, num_experts, dropout):
+        super().__init__()
+        self.num_experts = num_experts
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        # Placeholder implementation
+        return x
+
+
 class LayerNorm(nn.Module):
     def __init__(self, d_model, eps=1e-6):
         super().__init__()

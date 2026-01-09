@@ -1,7 +1,7 @@
 import datasets as hf_datasets
-from src import token
-
-SEED = 0
+from src import token, utils
+import os
+import json
 
 
 def download_dataset(dataset_name):
@@ -9,26 +9,26 @@ def download_dataset(dataset_name):
     return ds
 
 
-def preprocess_train_ds(ds, test_split_ratio):
-    ds = ds["train"].train_test_split(test_size=test_split_ratio, seed=SEED)
+def preprocess_train_ds(ds, test_split_ratio, seed):
+    ds = ds["train"].train_test_split(test_size=test_split_ratio, seed=seed)
     return ds
 
 
-def save_dataset(ds, ds_name, config):
-    path = f"{config['train']['data_dir']}/{ds_name}"
-    ds.save_to_disk(path)
-    return path
-
-
-def get_train_dataset(config):
+def get_raw_dataset(config):
     data_config = config["data"]
-    if data_config["build"]:
-        ds = download_dataset(data_config["train_ds"])
-        ds = preprocess_train_ds(ds, data_config["test_split_ratio"])
-        ds.save_to_disk(f"{data_config['data_dir']}/ds_raw")
+    ds_hash = utils.fingerprint(data_config)
+    dataset_path = config["locations"]["raw_data_dir"] + f"/{ds_hash}"
+
+    if os.path.exists(dataset_path):
+        ds = hf_datasets.load_from_disk(dataset_path)
     else:
-        ds = hf_datasets.load_from_disk(data_config["data_dir"] + "/ds_raw")
-    return ds
+        ds = download_dataset(data_config["train_ds"])
+        ds = preprocess_train_ds(ds, data_config["test_split_ratio"], data_config["seed"])
+        ds.save_to_disk(dataset_path)
+        with open(dataset_path + "/config.json", "w") as f:
+            json.dump(data_config, f, indent=2)
+
+    return ds, ds_hash
 
 
 def _tokenize_text(text, tokenizers):
@@ -61,11 +61,23 @@ def tokenize_dataset(ds, tokenizers, max_length):
     return ds
 
 
-def get_tokenized_dataset(ds, tokenizers, config):
+def get_tokenized_dataset(ds, tokenizers, ds_raw_hash, ds_tokenizers_hash, config):
     data_config = config["data"]
-    if data_config["build"]:
-        ds_tokenized = tokenize_dataset(ds, tokenizers, data_config["max_length"])
-        ds_tokenized.save_to_disk(f"{data_config['data_dir']}/ds_tokenized")
+    data_config_resolved = {
+        **data_config,
+        "datasets_raw_hash": ds_raw_hash,
+        "tokenizers_hash": ds_tokenizers_hash,
+    }
+    data_hash = utils.fingerprint(data_config_resolved)
+    dataset_path = f"{config["locations"]["tokenized_data_dir"]}/{data_hash}"
+
+    if os.path.exists(dataset_path):
+        ds_tokenized = hf_datasets.load_from_disk(dataset_path)
+
     else:
-        ds_tokenized = hf_datasets.load_from_disk(data_config["data_dir"] + "/ds_tokenized")
-    return ds_tokenized
+        ds_tokenized = tokenize_dataset(ds, tokenizers, data_config["max_length"])
+        ds_tokenized.save_to_disk(dataset_path)
+        with open(dataset_path + "/config.json", "w") as f:
+            json.dump(data_config_resolved, f, indent=2)
+
+    return ds_tokenized, data_hash
