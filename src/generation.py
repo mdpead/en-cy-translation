@@ -2,8 +2,8 @@ import torch
 
 
 def generate_texts(model, tokenizers, input_texts, max_length, device):
-    model = model.to(device)
-
+    # Model should already be on the correct device, so we don't move it again
+    
     src_input_ids = tokenizers["en"](input_texts, return_tensors="pt")["input_ids"].to(device)
     src_padding_mask = (src_input_ids != tokenizers["en"].pad_token_id).to(device)
 

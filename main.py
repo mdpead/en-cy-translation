@@ -4,6 +4,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 config = {
+    "name": "transformer_en_cy_translation",
     "model": {
         "d_model": 512,
         "num_heads": 8,
@@ -30,6 +31,7 @@ config = {
         "model_dir": None,
         "validation_steps": 10,
         "validation_accum_steps": 1,
+        "compile_model": False,
     },
     "data": {
         "train_ds": "techiaith/cardiff-university-tm-en-cy",
@@ -77,7 +79,7 @@ transformer = model.build_transformer(config)
 results = train.train(transformer, dataloader, tokenizers, dataloader_hash, config)
 
 test = generation.generate_texts(
-    transformer, tokenizers, input_texts=["This is a test sentence."], max_length=50, device="cuda"
+    transformer, tokenizers, input_texts=["This is a test sentence."], max_length=50, device=config["train"]["device"]
 )
 
 
