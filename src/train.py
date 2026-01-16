@@ -10,6 +10,7 @@ from src import utils
 import sacrebleu
 from src import generation
 import os
+import itertools
 
 
 MODEL_INPUTS = [
@@ -45,10 +46,10 @@ class WarmupInverseSquareRootLR(LRScheduler):
         return lrs
 
 
-def generate_metrics(model, batch, max_length, tokenizers):
+def generate_metrics(model, batch, max_length, tokenizers, device):
 
     pred_text = generation.generate_texts(
-        model, tokenizers, input_texts=batch["src_text"], max_length=max_length, device="cuda"
+        model, tokenizers, input_texts=batch["src_text"], max_length=max_length, device=device
     )
 
     sacrebleu_score = sacrebleu.corpus_bleu(
@@ -93,13 +94,12 @@ def validation_step(
             )
 
         batch_tokens = batch["src_input_ids"].ne(tokenizers["en"].pad_token_id).sum().item()
-
-        elapsed_time = time.time() - start_time
-
-        metrics = generate_metrics(model, batch, max_length, tokenizers)
+        metrics = generate_metrics(model, batch, max_length, tokenizers, device)
 
         if (batch_idx + 1) % validation_accum_steps == 0:
             break
+
+    elapsed_time = time.time() - start_time
 
     result = {}
     result["type"] = "validation"
@@ -138,10 +138,12 @@ def train_loop(
     minibatch_tokens = 0
     start_time = time.time()
     total_loss = 0.0
+    minibatch_idx = step_no * grad_accum_steps
+    train_dataloader = itertools.islice(dataloaders["train"], minibatch_idx, None)
+    optimiser.zero_grad(set_to_none=True)
 
     model.train()
-    optimiser.zero_grad(set_to_none=True)
-    for batch_idx, batch in enumerate(dataloaders["train"]):
+    for minibatch_idx, batch in enumerate(train_dataloader, start=minibatch_idx):
 
         # Move batch to device
         batch = {
@@ -170,10 +172,19 @@ def train_loop(
         total_loss += scaled_loss.item()
 
         # Gradient accumulation
-        if (batch_idx + 1) % grad_accum_steps != 0:
+        if (minibatch_idx + 1) % grad_accum_steps != 0:
             continue
 
-        # Logging
+        # Step optimiser and scheduler
+        scaler.step(optimiser)
+        scaler.update()
+        lr_scheduler.step()
+        optimiser.zero_grad(set_to_none=True)
+
+        # Increment step counter FIRST
+        step_no += 1
+
+        # Logging with the completed step number
         elapsed_time = time.time() - start_time
         result = {}
         result["type"] = "train"
@@ -186,14 +197,7 @@ def train_loop(
         results.append(result)
         logging.info(result)
 
-        # Step optimiser and scheduler
-        scaler.step(optimiser)
-        scaler.update()
-        lr_scheduler.step()
-        optimiser.zero_grad(set_to_none=True)
-
         # Reset counters
-        step_no += 1
         batch_tokens = 0
         start_time = time.time()
         total_loss = 0.0
@@ -215,7 +219,7 @@ def train_loop(
 
         # Checkpointing
         if step_no % checkpoint_steps == 0:
-            save_checkpoint(model, run_path, step_no, results)
+            save_checkpoint(model, optimiser, lr_scheduler, scaler, run_path, step_no, results)
 
         # Stop after num_steps
         if step_no >= num_steps:
@@ -230,108 +234,149 @@ def train_loop(
     return results
 
 
-def save_checkpoint(model, run_path, step_no, results):
+def save_checkpoint(model, optimiser, lr_scheduler, scaler, run_path, step_no, results):
     checkpoints_path = f"{run_path}/checkpoints"
     os.makedirs(checkpoints_path, exist_ok=True)
-    torch.save(model.state_dict(), f"{checkpoints_path}/{step_no}.pt")
-    json.dump(results, open(f"{run_path}/results.json", "w"))
+
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimiser.state_dict(),
+        "scheduler_state_dict": lr_scheduler.state_dict(),
+        "scaler_state_dict": scaler.state_dict(),
+        "step_no": step_no,
+        "results": results,
+    }
+
+    torch.save(checkpoint, f"{checkpoints_path}/{step_no}.pt")
     logging.info(f"Checkpoint saved at step {step_no}")
+    return None
 
 
-def load_checkpoint(model, run_path, step_no):
+def load_checkpoint(run_path, step_no, device=None):
     checkpoints_path = f"{run_path}/checkpoints"
-    model.load_state_dict(torch.load(f"{checkpoints_path}/{step_no}.pt"))
+    # Load checkpoint with device mapping if device is specified
+    if device is not None:
+        checkpoint = torch.load(f"{checkpoints_path}/{step_no}.pt", map_location=device)
+    else:
+        checkpoint = torch.load(f"{checkpoints_path}/{step_no}.pt")
+
     logging.info(f"Checkpoint loaded from step {step_no}")
-    return model
+    return checkpoint
 
 
-def create_run(run_path, config_resolved):
+def create_training_objects(model, train_config):
+
+    # Define loss function, optimiser, and scheduler
+    device = torch.device(train_config["train"]["device"])
+    criterion = nn.CrossEntropyLoss(
+        reduction="mean",
+        label_smoothing=train_config["train"]["label_smoothing"],
+        ignore_index=train_config["tokenizers"]["pad_token_id"],
+    ).to(device)
+
+    optimiser = torch.optim.AdamW(
+        model.parameters(),
+        lr=train_config["train"]["learning_rate"],
+        betas=train_config["train"]["adam_betas"],
+        eps=train_config["train"]["adam_eps"],
+        weight_decay=0.01,
+    )
+
+    lr_scheduler = WarmupInverseSquareRootLR(optimiser, train_config["train"]["warm_up_steps"])
+
+    scaler = amp.GradScaler()
+
+    return criterion, optimiser, lr_scheduler, scaler
+
+
+def create_run(model, run_path, train_config):
     os.makedirs(run_path, exist_ok=True)
-    json.dump(config_resolved, open(run_path + "/config.json", "w"), indent=2)
+    json.dump(train_config, open(run_path + "/config.json", "w"), indent=2)
     results = []
-    json.dump(results, open(f"{run_path}/results.json", "w"))
-    return results
+
+    # Move model to device before creating training objects
+    device = torch.device(train_config["train"]["device"])
+    model.to(device)
+
+    criterion, optimiser, lr_scheduler, scaler = create_training_objects(model, train_config)
+
+    return model, criterion, optimiser, lr_scheduler, scaler, results, 0
 
 
-def load_run(run_path, model):
-    results = json.load(open(f"{run_path}/results.json", "r"))
-    results_step_no_latest = (
-        max([result["step_no"] for result in results if result.get("type") == "train"])
-        if results
-        else 0
-    )
-    checkpoints = (
-        os.listdir(f"{run_path}/checkpoints") if os.path.isdir(f"{run_path}/checkpoints") else []
-    )
+def load_run(run_path, model, train_config):
+    # Check for existing checkpoints
+    checkpoints = [f for f in os.listdir(run_path + "/checkpoints")]
     if not checkpoints:
-        return model, results
+        raise FileNotFoundError(f"No checkpoints found in {run_path}")
 
     checkpoint_latest_step = max([int(checkpoint.split(".")[0]) for checkpoint in checkpoints])
-    model = load_checkpoint(model, run_path, checkpoint_latest_step)
 
-    # Ensure results correspond to loaded checkpoint
-    if results_step_no_latest != checkpoint_latest_step:
-        logging.warning(
-            "Warning: Loaded checkpoint step does not match latest results step, truncating results."
-        )
-        results = [r for r in results if r.get("step_no", -1) <= checkpoint_latest_step]
+    # Move model to device BEFORE loading checkpoint
+    device = torch.device(train_config["train"]["device"])
+    model.to(device)
 
-    return model, results
+    checkpoint = load_checkpoint(run_path, checkpoint_latest_step, device)
+
+    # Create and load training objects
+    criterion, optimiser, lr_scheduler, scaler = create_training_objects(model, train_config)
+
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimiser.load_state_dict(checkpoint["optimizer_state_dict"])
+    lr_scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+    scaler.load_state_dict(checkpoint["scaler_state_dict"])
+    results = checkpoint["results"]
+    # Use the step_no from the checkpoint to ensure consistency
+    step_no = checkpoint["step_no"]
+
+    return model, criterion, optimiser, lr_scheduler, scaler, results, step_no
 
 
 def get_run(config, dataloaders_hash, model):
-    config_resolved = {
-        **config,
+    # Only hash training-relevant config
+    train_config = {
+        "train": config["train"],
+        "model": config["model"],
+        "tokenizers": config["tokenizers"],
         "dataloaders_hash": dataloaders_hash,
     }
-    run_hash = utils.fingerprint(config_resolved)
+    run_hash = utils.fingerprint(train_config)
     run_path = f"{config["locations"]["run_dir"]}/{run_hash}"
     if os.path.exists(run_path):
-        model, results = load_run(run_path, model)
+        model, criterion, optimiser, lr_scheduler, scaler, results, step_no = load_run(
+            run_path, model, train_config
+        )
     else:
-        results = create_run(run_path, config_resolved)
-    return run_path, model, results
+        model, criterion, optimiser, lr_scheduler, scaler, results, step_no = create_run(
+            model, run_path, train_config
+        )
+
+    return run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no
 
 
 def train(model: nn.Module, dataloaders, tokenizers, dataloaders_hash, config):
 
     # Set up run
-    run_path, model, results = get_run(config, dataloaders_hash, model)
+    run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no = get_run(
+        config, dataloaders_hash, model
+    )
+
+    # If step_no >= num_steps, training is complete
+    if step_no >= config["train"]["num_steps"]:
+        logging.info("Training already complete.")
+        return results
 
     train_config = config["train"]
 
-    # Move model to device
+    # Model is already moved to device in get_run, so we don't need to move it again
     device = torch.device(train_config["device"])
-    model.to(device)
 
     # Compile model
-    # model.compile(fullgraph=True)
-
-    # Define loss function, optimiser, and scheduler
-    criterion = nn.CrossEntropyLoss(
-        reduction="mean",
-        label_smoothing=train_config["label_smoothing"],
-        ignore_index=config["tokenizers"]["pad_token_id"],
-    )
-
-    optimiser = torch.optim.AdamW(
-        model.parameters(),
-        lr=train_config["learning_rate"],
-        betas=train_config["adam_betas"],
-        eps=train_config["adam_eps"],
-        weight_decay=0.01,
-    )
-
-    lr_scheduler = WarmupInverseSquareRootLR(optimiser, train_config["warm_up_steps"])
-
-    scaler = amp.GradScaler()
+    if train_config.get("compile_model", False):
+        model.compile(fullgraph=True)
 
     grad_accum_steps = (
         train_config["effective_batch_token_size"] // train_config["minibatch_token_size"]
     )
-
-    # Need to reload training state if resuming
-    step_no = results[-1].get("step_no", 0) if results else 0
 
     results = train_loop(
         model,

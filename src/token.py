@@ -64,7 +64,7 @@ def load_tokenizers(tokenizers_dir):
 
 def get_tokenizers(ds, ds_hash, config):
     tokenizers_config = config["tokenizers"]
-    tokenizers_config_resolved = {**tokenizers_config, "datasets_raw_hash": ds_hash}
+    tokenizers_config_resolved = {**config["tokenizers"], "datasets_raw_hash": ds_hash}
     tokenizers_hash = utils.fingerprint(tokenizers_config_resolved)
     tokenizers_path = f"{config['locations']['tokenizers_dir']}/{tokenizers_hash}"
     if os.path.exists(tokenizers_path):
