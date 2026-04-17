@@ -289,16 +289,18 @@ def create_training_objects(model, train_config):
     return criterion, optimiser, lr_scheduler, scaler
 
 
-def create_run(model, run_path, train_config):
+def create_run(model, run_path, config, tokenizers):
     os.makedirs(run_path, exist_ok=True)
-    json.dump(train_config, open(run_path + "/config.json", "w"), indent=2)
+    json.dump(config, open(run_path + "/config.json", "w"), indent=2)
+    tokenizers["en"].save_pretrained(f"{run_path}/tokenizer_en")
+    tokenizers["cy"].save_pretrained(f"{run_path}/tokenizer_cy")
     results = []
 
     # Move model to device before creating training objects
-    device = torch.device(train_config["train"]["device"])
+    device = torch.device(config["train"]["device"])
     model.to(device)
 
-    criterion, optimiser, lr_scheduler, scaler = create_training_objects(model, train_config)
+    criterion, optimiser, lr_scheduler, scaler = create_training_objects(model, config)
 
     return model, criterion, optimiser, lr_scheduler, scaler, results, 0
 
@@ -331,7 +333,7 @@ def load_run(run_path, model, train_config):
     return model, criterion, optimiser, lr_scheduler, scaler, results, step_no
 
 
-def get_run(config, model):
+def get_run(config, model, tokenizers):
     run_dir = config["locations"]["run_dir"]
     resume_run = config["train"].get("resume_run")
 
@@ -345,7 +347,7 @@ def get_run(config, model):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_path = f"{run_dir}/{run_name}_{timestamp}"
         model, criterion, optimiser, lr_scheduler, scaler, results, step_no = create_run(
-            model, run_path, config
+            model, run_path, config, tokenizers
         )
 
     return run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no
@@ -355,7 +357,7 @@ def train(model: nn.Module, dataloaders, tokenizers, config):
 
     # Set up run
     run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no = get_run(
-        config, model
+        config, model, tokenizers
     )
 
     # If step_no >= num_steps, training is complete
