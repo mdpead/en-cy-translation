@@ -4,9 +4,9 @@ from torch.optim.lr_scheduler import LRScheduler
 import logging
 import time
 import json
+from datetime import datetime
 from torch.optim import Optimizer
 from torch import amp
-from src import utils
 import sacrebleu
 from src import generation
 import os
@@ -331,33 +331,31 @@ def load_run(run_path, model, train_config):
     return model, criterion, optimiser, lr_scheduler, scaler, results, step_no
 
 
-def get_run(config, dataloaders_hash, model):
-    # Only hash training-relevant config
-    train_config = {
-        "train": config["train"],
-        "model": config["model"],
-        "tokenizers": config["tokenizers"],
-        "dataloaders_hash": dataloaders_hash,
-    }
-    run_hash = utils.fingerprint(train_config)
-    run_path = f"{config["locations"]["run_dir"]}/{run_hash}"
-    if os.path.exists(run_path):
+def get_run(config, model):
+    run_dir = config["locations"]["run_dir"]
+    resume_run = config["train"].get("resume_run")
+
+    if resume_run and os.path.exists(resume_run):
+        run_path = resume_run
         model, criterion, optimiser, lr_scheduler, scaler, results, step_no = load_run(
-            run_path, model, train_config
+            run_path, model, config
         )
     else:
+        run_name = config.get("name", "run")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_path = f"{run_dir}/{run_name}_{timestamp}"
         model, criterion, optimiser, lr_scheduler, scaler, results, step_no = create_run(
-            model, run_path, train_config
+            model, run_path, config
         )
 
     return run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no
 
 
-def train(model: nn.Module, dataloaders, tokenizers, dataloaders_hash, config):
+def train(model: nn.Module, dataloaders, tokenizers, config):
 
     # Set up run
     run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no = get_run(
-        config, dataloaders_hash, model
+        config, model
     )
 
     # If step_no >= num_steps, training is complete

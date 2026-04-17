@@ -26,9 +26,7 @@ config = {
         "device": "cuda",
         "checkpoint_steps": 5,
         "warm_up_steps": 50,
-        "models_dir": "./models",
-        "resume": False,
-        "model_dir": None,
+        "resume_run": None,
         "validation_steps": 10,
         "validation_accum_steps": 1,
         "compile_model": False,
@@ -72,11 +70,11 @@ ds_tokenized, ds_tokenized_hash = datasets.get_tokenized_dataset(
     ds_raw, tokenizers, ds_raw_hash, tokenizers_hash, config
 )
 
-dataloader, dataloader_hash = dataloaders.get_dataloaders(ds_tokenized, ds_tokenized_hash, config)
+dataloader, _ = dataloaders.get_dataloaders(ds_tokenized, ds_tokenized_hash, config)
 
 transformer = model.build_transformer(config)
 
-results = train.train(transformer, dataloader, tokenizers, dataloader_hash, config)
+results = train.train(transformer, dataloader, tokenizers, config)
 
 test = generation.generate_texts(
     transformer, tokenizers, input_texts=["This is a test sentence."], max_length=50, device=config["train"]["device"]
