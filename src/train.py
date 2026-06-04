@@ -6,7 +6,6 @@ import time
 import json
 from torch.optim import Optimizer
 from torch import amp
-from src import utils
 import sacrebleu
 from src import generation
 import os
@@ -46,10 +45,10 @@ class WarmupInverseSquareRootLR(LRScheduler):
         return lrs
 
 
-def generate_metrics(model, batch, max_length, tokenizers, device):
+def generate_metrics(model, batch, max_length, tokenizer, device):
 
     pred_text = generation.generate_texts(
-        model, tokenizers, input_texts=batch["src_text"], max_length=max_length, device=device
+        model, tokenizer, input_texts=batch["src_text"], max_length=max_length, device=device
     )
 
     sacrebleu_score = sacrebleu.corpus_bleu(
@@ -69,7 +68,7 @@ def generate_metrics(model, batch, max_length, tokenizers, device):
 
 
 def validation_step(
-    model, dataloader, criterion, device, tokenizers, validation_accum_steps, step_no, max_length
+    model, dataloader, criterion, device, tokenizer, validation_accum_steps, step_no, max_length
 ):
 
     start_time = time.time()
@@ -93,8 +92,8 @@ def validation_step(
                 logits.reshape(-1, logits.shape[2]), batch["tgt_output_ids"].reshape(-1)
             )
 
-        batch_tokens = batch["src_input_ids"].ne(tokenizers["en"].pad_token_id).sum().item()
-        metrics = generate_metrics(model, batch, max_length, tokenizers, device)
+        batch_tokens = batch["src_input_ids"].ne(tokenizer["en"].pad_token_id).sum().item()
+        metrics = generate_metrics(model, batch, max_length, tokenizer, device)
 
         if (batch_idx + 1) % validation_accum_steps == 0:
             break
@@ -120,7 +119,7 @@ def train_loop(
     optimiser,
     lr_scheduler,
     num_steps,
-    tokenizers,
+    tokenizer,
     grad_accum_steps,
     device,
     checkpoint_steps,
@@ -164,7 +163,7 @@ def train_loop(
             )
 
         # Compute loss and gradients
-        minibatch_tokens = batch["src_input_ids"].ne(tokenizers["en"].pad_token_id).sum().item()
+        minibatch_tokens = batch["src_input_ids"].ne(tokenizer["en"].pad_token_id).sum().item()
         batch_tokens += minibatch_tokens
 
         scaled_loss = loss / grad_accum_steps
@@ -209,7 +208,7 @@ def train_loop(
                 dataloaders["test"],
                 criterion,
                 device,
-                tokenizers,
+                tokenizer,
                 validation_accum_steps,
                 step_no,
                 max_length,
@@ -271,7 +270,7 @@ def create_training_objects(model, train_config):
     criterion = nn.CrossEntropyLoss(
         reduction="mean",
         label_smoothing=train_config["train"]["label_smoothing"],
-        ignore_index=train_config["tokenizers"]["pad_token_id"],
+        ignore_index=train_config["tokenizer"]["pad_token_id"],
     ).to(device)
 
     optimiser = torch.optim.AdamW(
@@ -331,33 +330,25 @@ def load_run(run_path, model, train_config):
     return model, criterion, optimiser, lr_scheduler, scaler, results, step_no
 
 
-def get_run(config, dataloaders_hash, model):
-    # Only hash training-relevant config
-    train_config = {
-        "train": config["train"],
-        "model": config["model"],
-        "tokenizers": config["tokenizers"],
-        "dataloaders_hash": dataloaders_hash,
-    }
-    run_hash = utils.fingerprint(train_config)
-    run_path = f"{config["locations"]["run_dir"]}/{run_hash}"
+def get_run(config, model):
+    run_path = f"{config['locations']['run_dir']}/{config['name']}"
     if os.path.exists(run_path):
         model, criterion, optimiser, lr_scheduler, scaler, results, step_no = load_run(
-            run_path, model, train_config
+            run_path, model, config
         )
     else:
         model, criterion, optimiser, lr_scheduler, scaler, results, step_no = create_run(
-            model, run_path, train_config
+            model, run_path, config
         )
 
     return run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no
 
 
-def train(model: nn.Module, dataloaders, tokenizers, dataloaders_hash, config):
+def train(model: nn.Module, dataloaders, tokenizer, config):
 
     # Set up run
     run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no = get_run(
-        config, dataloaders_hash, model
+        config, model
     )
 
     # If step_no >= num_steps, training is complete
@@ -385,7 +376,7 @@ def train(model: nn.Module, dataloaders, tokenizers, dataloaders_hash, config):
         optimiser,
         lr_scheduler,
         train_config["num_steps"],
-        tokenizers,
+        tokenizer,
         grad_accum_steps,
         device,
         train_config["checkpoint_steps"],

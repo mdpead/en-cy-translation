@@ -2,9 +2,6 @@ from torch.utils.data import DataLoader
 import torch
 from torch.utils.data.sampler import BatchSampler
 import random
-import pickle, json
-import os
-from src import utils
 from functools import partial
 
 SEED = 0
@@ -94,37 +91,3 @@ def create_dataloaders(
             pin_memory=True,
         )
     return dataloaders
-
-
-def load_dataloaders(dataloaders_path):
-    with open(dataloaders_path + "/dataloaders.pkl", "rb") as f:
-        dataloaders = pickle.load(f)
-        return dataloaders
-
-
-def save_dataloaders(dataloaders, dataloaders_path):
-    os.makedirs(dataloaders_path, exist_ok=True)
-    with open(dataloaders_path + "/dataloaders.pkl", "wb") as f:
-        pickle.dump(dataloaders, f)
-    return None
-
-
-def get_dataloaders(ds_tokenized, ds_tokenized_hash, config):
-    dataloaders_config = config["dataloaders"]
-    dataloaders_config_resolved = {
-        **dataloaders_config,
-        "datasets_tokenized_hash": ds_tokenized_hash,
-    }
-    dataloaders_hash = utils.fingerprint(dataloaders_config_resolved)
-    dataloaders_path = f"{config["locations"]["dataloaders_data_dir"]}/{dataloaders_hash}"
-
-    if os.path.exists(dataloaders_path):
-        dataloaders = load_dataloaders(dataloaders_path)
-
-    else:
-        dataloaders = create_dataloaders(ds_tokenized, config)
-        save_dataloaders(dataloaders, dataloaders_path)
-        with open(dataloaders_path + "/config.json", "w") as f:
-            json.dump(dataloaders_config_resolved, f, indent=2)
-
-    return dataloaders, dataloaders_hash

@@ -5,7 +5,10 @@ import torch
 import re
 import glob
 import logging
-import hashlib
+
+
+def get_model_path(config):
+    return f"{config['locations']['model_dir']}/{config['name']}"
 
 
 def create_model_dir(models_dir):
@@ -96,8 +99,3 @@ def load_model_checkpoint(models_dir, model_dir, step=None, device="cuda"):
     checkpoint = torch.load(f"{models_dir}/{checkpoint_path}", map_location=device)
 
     return checkpoint, step
-
-
-def fingerprint(config: dict) -> str:
-    blob = json.dumps(config, sort_keys=True).encode()
-    return hashlib.sha256(blob).hexdigest()[:16]
