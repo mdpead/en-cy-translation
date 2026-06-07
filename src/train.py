@@ -10,7 +10,7 @@ import sacrebleu
 from src import generation
 import os
 import itertools
-
+from src import utils
 
 MODEL_INPUTS = [
     "src_input_ids",
@@ -71,6 +71,7 @@ def validation_step(
     model, dataloader, criterion, device, tokenizer, validation_accum_steps, step_no, max_length
 ):
 
+    model.eval()
     start_time = time.time()
 
     for batch_idx, batch in enumerate(dataloader):
@@ -92,7 +93,7 @@ def validation_step(
                 logits.reshape(-1, logits.shape[2]), batch["tgt_output_ids"].reshape(-1)
             )
 
-        batch_tokens = batch["src_input_ids"].ne(tokenizer["en"].pad_token_id).sum().item()
+        batch_tokens = batch["src_input_ids"].ne(tokenizer.pad_token_id).sum().item()
         metrics = generate_metrics(model, batch, max_length, tokenizer, device)
 
         if (batch_idx + 1) % validation_accum_steps == 0:
@@ -134,7 +135,6 @@ def train_loop(
 
     # Initialise values - need to do learning rate, optimiser state, scaler state loading here too
     batch_tokens = 0
-    minibatch_tokens = 0
     start_time = time.time()
     total_loss = 0.0
     minibatch_idx = step_no * grad_accum_steps
@@ -163,7 +163,7 @@ def train_loop(
             )
 
         # Compute loss and gradients
-        minibatch_tokens = batch["src_input_ids"].ne(tokenizer["en"].pad_token_id).sum().item()
+        minibatch_tokens = batch["src_input_ids"].ne(tokenizer.pad_token_id).sum().item()
         batch_tokens += minibatch_tokens
 
         scaled_loss = loss / grad_accum_steps
@@ -215,20 +215,18 @@ def train_loop(
             )
             logging.info(validation_result)
             results.append(validation_result)
+            model.train()
 
         # Checkpointing
         if step_no % checkpoint_steps == 0:
             save_checkpoint(model, optimiser, lr_scheduler, scaler, run_path, step_no, results)
 
+        # Delete tensors to free up memory
+        del batch, logits, loss, scaled_loss
+
         # Stop after num_steps
         if step_no >= num_steps:
             break
-
-        # Delete tensors to free up memory
-        del batch
-        del logits
-        del loss
-        del scaled_loss
 
     return results
 
@@ -270,7 +268,7 @@ def create_training_objects(model, train_config):
     criterion = nn.CrossEntropyLoss(
         reduction="mean",
         label_smoothing=train_config["train"]["label_smoothing"],
-        ignore_index=train_config["tokenizer"]["pad_token_id"],
+        ignore_index=train_config["tokenizers"]["pad_token_id"],
     ).to(device)
 
     optimiser = torch.optim.AdamW(
@@ -304,7 +302,7 @@ def create_run(model, run_path, train_config):
 
 def load_run(run_path, model, train_config):
     # Check for existing checkpoints
-    checkpoints = [f for f in os.listdir(run_path + "/checkpoints")]
+    checkpoints = [f for f in os.listdir(run_path + "/checkpoints") if f.endswith(".pt")]
     if not checkpoints:
         raise FileNotFoundError(f"No checkpoints found in {run_path}")
 
@@ -331,8 +329,13 @@ def load_run(run_path, model, train_config):
 
 
 def get_run(config, model):
-    run_path = f"{config['locations']['run_dir']}/{config['name']}"
-    if os.path.exists(run_path):
+    run_path = utils.get_model_path(config)
+    checkpoints_path = f"{run_path}/checkpoints"
+    has_checkpoint = os.path.isdir(checkpoints_path) and any(
+        f.endswith(".pt") for f in os.listdir(checkpoints_path)
+    )
+
+    if has_checkpoint:
         model, criterion, optimiser, lr_scheduler, scaler, results, step_no = load_run(
             run_path, model, config
         )
@@ -344,7 +347,7 @@ def get_run(config, model):
     return run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no
 
 
-def train(model: nn.Module, dataloaders, tokenizer, config):
+def train(model, dataloaders, tokenizer, config):
 
     # Set up run
     run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no = get_run(
@@ -363,7 +366,7 @@ def train(model: nn.Module, dataloaders, tokenizer, config):
 
     # Compile model
     if train_config.get("compile_model", False):
-        model.compile(fullgraph=True)
+        model = torch.compile(model, fullgraph=True)
 
     grad_accum_steps = (
         train_config["effective_batch_token_size"] // train_config["minibatch_token_size"]

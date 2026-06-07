@@ -4,7 +4,7 @@ from tokenizers import normalizers
 from tokenizers import decoders
 from transformers import PreTrainedTokenizerFast
 import itertools
-import utils
+from src import utils
 
 
 def create_tokenizer(ds, tokenizer_config):
@@ -57,7 +57,7 @@ def _tokenize_text(text, tokenizer):
     }
 
 
-def tokenize_dataset(ds, tokenizer, max_length):
+def tokenize_dataset(ds, tokenizer, config):
     ds = ds.map(lambda x: _tokenize_text(x, tokenizer), batched=True, batch_size=100000)
     ds = ds.map(
         lambda row: {
@@ -65,6 +65,7 @@ def tokenize_dataset(ds, tokenizer, max_length):
             "cy_token_length": len(row["text_cy_tokenized"]),
         },
     )
+    max_length = config["model"]["max_length"]
     ds = ds.filter(
         lambda x: (x["en_token_length"] <= max_length) and (x["cy_token_length"] <= max_length)
     )
@@ -72,16 +73,12 @@ def tokenize_dataset(ds, tokenizer, max_length):
     return ds
 
 
-def get_tokenized_dataset(ds, tokenizer, config):
-    return tokenize_dataset(ds, tokenizer, config["data"]["max_length"])
-
-
 def get_tokenizer(ds, config):
 
     tokenizer_config = config["tokenizer"]
     model_path = utils.get_model_path(config)
 
-    tokenizers = create_tokenizer(ds, tokenizer_config)
-    save_tokenizer(tokenizers, model_path)
+    tokenizer = create_tokenizer(ds, tokenizer_config)
+    save_tokenizer(tokenizer, model_path)
 
-    return tokenizers
+    return tokenizer
