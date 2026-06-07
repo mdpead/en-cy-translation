@@ -12,7 +12,7 @@ args = parser.parse_args()
 with open(f"configs/{args.config}.yaml") as f:
     config = yaml.safe_load(f)
 
-ds_raw = datasets.get_raw_dataset(config)
+ds_raw = datasets.get_dataset("train", config)
 
 token = tokenizer.get_tokenizer(ds_raw, config)
 

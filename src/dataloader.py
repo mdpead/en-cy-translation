@@ -87,7 +87,7 @@ def create_dataloaders(
             batch_sampler=TokenSampler(
                 ds_tokenized[split], config["train"]["minibatch_token_size"]
             ),
-            collate_fn=partial(collate_batch, pad_token_id=config["tokenizers"]["pad_token_id"]),
+            collate_fn=partial(collate_batch, pad_token_id=config["tokenizer"]["pad_token_id"]),
             pin_memory=True,
         )
     return dataloaders

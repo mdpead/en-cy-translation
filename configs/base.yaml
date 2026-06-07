@@ -29,11 +29,12 @@ train:
   validation_accum_steps: 1
   compile_model: false
 
-data: 
-  train_ds: techiaith/cardiff-university-tm-en-cy
-  benchmark_ds: openlanguagedata/flores_plus
-  max_length: 1024
-  test_split_ratio: 0.1
+data:
+  train:
+    ds: techiaith/cardiff-university-tm-en-cy
+    test_split_ratio: 0.1
+  benchmark:
+    ds: openlanguagedata/flores_plus
 
 tokenizers:
   vocab_size: 10000
