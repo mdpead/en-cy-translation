@@ -1,3 +1,4 @@
+import os
 from tokenizers import Tokenizer
 from tokenizers import models, pre_tokenizers, trainers, processors
 from tokenizers import normalizers
@@ -76,9 +77,13 @@ def tokenize_dataset(ds, tokenizer, config):
 def get_tokenizer(ds, config):
 
     tokenizer_config = config["tokenizer"]
-    model_path = utils.get_model_path(config)
+    run_path = utils.get_run_path(config)
+    tokenizer_path = f"{run_path}/tokenizer"
+
+    if os.path.isdir(tokenizer_path):
+        return load_tokenizer(run_path)
 
     tokenizer = create_tokenizer(ds, tokenizer_config)
-    save_tokenizer(tokenizer, model_path)
+    save_tokenizer(tokenizer, run_path)
 
     return tokenizer

@@ -22,9 +22,8 @@ train:
   device: cuda
   checkpoint_steps: 5
   warm_up_steps: 5
-  resume: false
   validation_steps: 5
-  validation_accum_steps: 1
+  validation_batches: 10
   compile_model: false
 
 data: 
@@ -49,4 +48,4 @@ tokenizer:
 
 locations:
   data_dir: ./data
-  model_dir: ./models
+  runs_dir: ./runs
