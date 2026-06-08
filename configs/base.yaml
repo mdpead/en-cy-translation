@@ -24,9 +24,8 @@ train:
   checkpoint_steps: 5
   warm_up_steps: 50
   models_dir: ./models
-  resume: false
   validation_steps: 10
-  validation_accum_steps: 1
+  validation_batches: 100
   compile_model: false
 
 data:

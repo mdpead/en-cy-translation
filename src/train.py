@@ -67,21 +67,22 @@ def generate_metrics(model, batch, max_length, tokenizer, device):
     return metrics
 
 
-def validation_step(
-    model, dataloader, criterion, device, tokenizer, validation_accum_steps, step_no, max_length
-):
+def validation_step(model, dataloader, criterion, device, tokenizer, step_no, max_length, validation_batches):
 
     model.eval()
     start_time = time.time()
 
-    for batch_idx, batch in enumerate(dataloader):
+    total_loss = 0.0
+    total_tokens = 0
+    num_batches = 0
+    bleu_batch = None
 
-        # Move batch to device
+    for batch in itertools.islice(dataloader, validation_batches):
+
         batch = {
             k: v.to(device, non_blocking=True) if k in MODEL_INPUTS else v for k, v in batch.items()
         }
 
-        # Forward pass
         with torch.no_grad():
             logits = model(
                 batch["src_input_ids"],
@@ -93,24 +94,23 @@ def validation_step(
                 logits.reshape(-1, logits.shape[2]), batch["tgt_output_ids"].reshape(-1)
             )
 
-        batch_tokens = batch["src_input_ids"].ne(tokenizer.pad_token_id).sum().item()
-        metrics = generate_metrics(model, batch, max_length, tokenizer, device)
-
-        if (batch_idx + 1) % validation_accum_steps == 0:
-            break
+        total_loss += loss.item()
+        total_tokens += batch["src_input_ids"].ne(tokenizer.pad_token_id).sum().item()
+        num_batches += 1
+        if bleu_batch is None:
+            bleu_batch = batch
 
     elapsed_time = time.time() - start_time
+    bleu = generate_metrics(model, bleu_batch, max_length, tokenizer, device)["bleu"]
 
-    result = {}
-    result["type"] = "validation"
-    result["step_no"] = step_no
-    result["num_tokens"] = batch_tokens
-    result["tokens_per_sec"] = batch_tokens / elapsed_time
-    result["loss"] = loss.item()
-    result["token_length"] = batch["src_input_ids"].shape[1]
-    result["bleu"] = metrics["bleu"]
-
-    return result
+    return {
+        "type": "validation",
+        "step_no": step_no,
+        "num_tokens": total_tokens,
+        "tokens_per_sec": total_tokens / elapsed_time,
+        "loss": total_loss / num_batches,
+        "bleu": bleu,
+    }
 
 
 def train_loop(
@@ -127,7 +127,7 @@ def train_loop(
     run_path,
     scaler,
     validation_steps,
-    validation_accum_steps,
+    validation_batches,
     max_length,
     results,
     step_no,
@@ -209,9 +209,9 @@ def train_loop(
                 criterion,
                 device,
                 tokenizer,
-                validation_accum_steps,
                 step_no,
                 max_length,
+                validation_batches,
             )
             logging.info(validation_result)
             results.append(validation_result)
@@ -261,34 +261,32 @@ def load_checkpoint(run_path, step_no, device=None):
     return checkpoint
 
 
-def create_training_objects(model, train_config):
+def create_training_objects(model, config):
 
     # Define loss function, optimiser, and scheduler
-    device = torch.device(train_config["train"]["device"])
+    device = torch.device(config["train"]["device"])
     criterion = nn.CrossEntropyLoss(
         reduction="mean",
-        label_smoothing=train_config["train"]["label_smoothing"],
-        ignore_index=train_config["tokenizers"]["pad_token_id"],
+        label_smoothing=config["train"]["label_smoothing"],
+        ignore_index=config["tokenizer"]["pad_token_id"],
     ).to(device)
 
     optimiser = torch.optim.AdamW(
         model.parameters(),
-        lr=train_config["train"]["learning_rate"],
-        betas=train_config["train"]["adam_betas"],
-        eps=train_config["train"]["adam_eps"],
+        lr=config["train"]["learning_rate"],
+        betas=config["train"]["adam_betas"],
+        eps=config["train"]["adam_eps"],
         weight_decay=0.01,
     )
 
-    lr_scheduler = WarmupInverseSquareRootLR(optimiser, train_config["train"]["warm_up_steps"])
+    lr_scheduler = WarmupInverseSquareRootLR(optimiser, config["train"]["warm_up_steps"])
 
     scaler = amp.GradScaler()
 
     return criterion, optimiser, lr_scheduler, scaler
 
 
-def create_run(model, run_path, train_config):
-    os.makedirs(run_path, exist_ok=True)
-    json.dump(train_config, open(run_path + "/config.json", "w"), indent=2)
+def create_run(model, train_config):
     results = []
 
     # Move model to device before creating training objects
@@ -297,7 +295,15 @@ def create_run(model, run_path, train_config):
 
     criterion, optimiser, lr_scheduler, scaler = create_training_objects(model, train_config)
 
-    return model, criterion, optimiser, lr_scheduler, scaler, results, 0
+    return {
+        "model": model,
+        "criterion": criterion,
+        "optimiser": optimiser,
+        "lr_scheduler": lr_scheduler,
+        "scaler": scaler,
+        "results": results,
+        "step_no": 0,
+    }
 
 
 def load_run(run_path, model, train_config):
@@ -325,34 +331,45 @@ def load_run(run_path, model, train_config):
     # Use the step_no from the checkpoint to ensure consistency
     step_no = checkpoint["step_no"]
 
-    return model, criterion, optimiser, lr_scheduler, scaler, results, step_no
+    return {
+        "model": model,
+        "criterion": criterion,
+        "optimiser": optimiser,
+        "lr_scheduler": lr_scheduler,
+        "scaler": scaler,
+        "results": results,
+        "step_no": step_no,
+    }
 
 
 def get_run(config, model):
-    run_path = utils.get_model_path(config)
+    run_path = utils.get_run_path(config)
     checkpoints_path = f"{run_path}/checkpoints"
     has_checkpoint = os.path.isdir(checkpoints_path) and any(
         f.endswith(".pt") for f in os.listdir(checkpoints_path)
     )
 
     if has_checkpoint:
-        model, criterion, optimiser, lr_scheduler, scaler, results, step_no = load_run(
-            run_path, model, config
-        )
+        run = load_run(run_path, model, config)
     else:
-        model, criterion, optimiser, lr_scheduler, scaler, results, step_no = create_run(
-            model, run_path, config
-        )
+        run = create_run(model, config)
 
-    return run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no
+    run["run_path"] = run_path
+    return run
 
 
 def train(model, dataloaders, tokenizer, config):
 
     # Set up run
-    run_path, model, criterion, optimiser, lr_scheduler, scaler, results, step_no = get_run(
-        config, model
-    )
+    run = get_run(config, model)
+    run_path = run["run_path"]
+    model = run["model"]
+    criterion = run["criterion"]
+    optimiser = run["optimiser"]
+    lr_scheduler = run["lr_scheduler"]
+    scaler = run["scaler"]
+    results = run["results"]
+    step_no = run["step_no"]
 
     # If step_no >= num_steps, training is complete
     if step_no >= config["train"]["num_steps"]:
@@ -386,7 +403,7 @@ def train(model, dataloaders, tokenizer, config):
         run_path,
         scaler,
         validation_steps=train_config["validation_steps"],
-        validation_accum_steps=train_config["validation_accum_steps"],
+        validation_batches=train_config["validation_batches"],
         max_length=config["model"]["max_length"],
         results=results,
         step_no=step_no,
