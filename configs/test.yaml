@@ -2,10 +2,10 @@ name: test
 seed: 0
 
 model:
-  d_model: 512
+  d_model: 1024
   num_heads: 4
   vocab_size: 10000
-  max_length: 512
+  max_length: 64
   d_ff: 1024
   num_enc_layers: 2
   num_dec_layers: 2
@@ -17,14 +17,14 @@ train:
   learning_rate: 1.0e-4  # 1 / (D_MODEL * WARM_UP_STEPS) ** 0.5
   adam_betas: [0.9, 0.98]
   adam_eps: 1.0e-9
-  num_steps: 10
+  num_steps: 20
   label_smoothing: 0.1
   device: cuda
   checkpoint_steps: 5
   warm_up_steps: 5
   validation_steps: 5
-  validation_batches: 10
-  compile_model: false
+  validation_batches: 1
+  compile_model: true
 
 data: 
   train:

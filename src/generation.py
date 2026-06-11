@@ -14,6 +14,8 @@ def generate_texts(model, tokenizer, input_texts, max_length, device):
         [tokenizer.bos_token_id] * src_input_ids.size(0), device=device
     ).unsqueeze(-1)
     tgt_padding_mask = (tgt_input_ids != tokenizer.pad_token_id).to(device)
+    training = model.training
+    model.eval()
     with torch.no_grad():
         src_enc = model.encode(src_input_ids, src_padding_mask)
         for _ in range(max_length - 1):
@@ -25,4 +27,5 @@ def generate_texts(model, tokenizer, input_texts, max_length, device):
             if torch.all(torch.any(tgt_input_ids == tokenizer.eos_token_id, dim=-1)):
                 break
 
+    model.train(training)
     return tokenizer.batch_decode(tgt_input_ids, skip_special_tokens=True)
