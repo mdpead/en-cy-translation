@@ -1,32 +1,30 @@
 name: base
-
 seed: 0
 
 model:
   d_model: 512
   num_heads: 8
   vocab_size: 10000
-  max_length: 1024
+  max_length: 256
   d_ff: 2048
   num_enc_layers: 6
   num_dec_layers: 6
   dropout: 0.1
 
 train:
-  effective_batch_token_size: 20000
+  effective_batch_token_size: 25000
   minibatch_token_size: 512
-  learning_rate: 1.0e-4  # 1 / (D_MODEL * WARM_UP_STEPS) ** 0.5
+  learning_rate: 1.0e-3  # 1 / sqrt(d_model * warm_up_steps)
   adam_betas: [0.9, 0.98]
   adam_eps: 1.0e-9
-  num_steps: 3000
+  num_steps: 30000
   label_smoothing: 0.1
   device: cuda
-  checkpoint_steps: 5
-  warm_up_steps: 50
-  models_dir: ./models
-  validation_steps: 10
-  validation_batches: 100
-  compile_model: false
+  checkpoint_steps: 1000
+  warm_up_steps: 2000
+  validation_steps: 1000
+  validation_batches: 10
+  compile_model: true
 
 data:
   train:
@@ -35,7 +33,7 @@ data:
   benchmark:
     ds: openlanguagedata/flores_plus
 
-tokenizers:
+tokenizer:
   vocab_size: 10000
   special_tokens:
     pad_token: "<pad>"
@@ -43,8 +41,8 @@ tokenizers:
     bos_token: "<s>"
     eos_token: "</s>"
   pad_token_id: 2
-  training_size: 100000
+  training_size: null
 
 locations:
   data_dir: ./data
-  run_dir: ./runs
+  runs_dir: ./runs

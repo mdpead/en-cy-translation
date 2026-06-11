@@ -3,13 +3,13 @@ from torch import nn
 from torch.optim.lr_scheduler import LRScheduler
 import logging
 import time
-import json
 from torch.optim import Optimizer
 from torch import amp
 import sacrebleu
 from src import generation
 import os
 import itertools
+import json
 from src import utils
 
 MODEL_INPUTS = [
@@ -53,7 +53,7 @@ def generate_metrics(model, batch, max_length, tokenizer, device):
 
     sacrebleu_score = sacrebleu.corpus_bleu(
         pred_text,
-        batch["tgt_text"],
+        [batch["tgt_text"]],
         smooth_method="exp",
         smooth_value=0.0,
         lowercase=False,
@@ -67,7 +67,9 @@ def generate_metrics(model, batch, max_length, tokenizer, device):
     return metrics
 
 
-def validation_step(model, dataloader, criterion, device, tokenizer, step_no, max_length, validation_batches):
+def validation_step(
+    model, dataloader, criterion, device, tokenizer, step_no, max_length, validation_minibatches
+):
 
     model.eval()
     start_time = time.time()
@@ -77,31 +79,32 @@ def validation_step(model, dataloader, criterion, device, tokenizer, step_no, ma
     num_batches = 0
     bleu_batch = None
 
-    for batch in itertools.islice(dataloader, validation_batches):
+    for minibatch in itertools.islice(dataloader, validation_minibatches):
 
-        batch = {
-            k: v.to(device, non_blocking=True) if k in MODEL_INPUTS else v for k, v in batch.items()
+        minibatch = {
+            k: v.to(device, non_blocking=True) if k in MODEL_INPUTS else v
+            for k, v in minibatch.items()
         }
 
         with torch.no_grad():
             logits = model(
-                batch["src_input_ids"],
-                batch["tgt_input_ids"],
-                batch["src_padding_mask"],
-                batch["tgt_padding_mask"],
+                minibatch["src_input_ids"],
+                minibatch["tgt_input_ids"],
+                minibatch["src_padding_mask"],
+                minibatch["tgt_padding_mask"],
             )
             loss = criterion(
-                logits.reshape(-1, logits.shape[2]), batch["tgt_output_ids"].reshape(-1)
+                logits.reshape(-1, logits.shape[2]), minibatch["tgt_output_ids"].reshape(-1)
             )
 
         total_loss += loss.item()
-        total_tokens += batch["src_input_ids"].ne(tokenizer.pad_token_id).sum().item()
+        total_tokens += minibatch["src_input_ids"].ne(tokenizer.pad_token_id).sum().item()
         num_batches += 1
         if bleu_batch is None:
-            bleu_batch = batch
+            bleu_batch = minibatch
 
     elapsed_time = time.time() - start_time
-    bleu = generate_metrics(model, bleu_batch, max_length, tokenizer, device)["bleu"]
+    validation_metrics = generate_metrics(model, bleu_batch, max_length, tokenizer, device)
 
     return {
         "type": "validation",
@@ -109,7 +112,7 @@ def validation_step(model, dataloader, criterion, device, tokenizer, step_no, ma
         "num_tokens": total_tokens,
         "tokens_per_sec": total_tokens / elapsed_time,
         "loss": total_loss / num_batches,
-        "bleu": bleu,
+        "validation_metrics": validation_metrics,
     }
 
 
@@ -211,7 +214,7 @@ def train_loop(
                 tokenizer,
                 step_no,
                 max_length,
-                validation_batches,
+                validation_batches * grad_accum_steps,
             )
             logging.info(validation_result)
             results.append(validation_result)
@@ -228,15 +231,16 @@ def train_loop(
         if step_no >= num_steps:
             break
 
-    return results
+    return None
 
 
 def save_checkpoint(model, optimiser, lr_scheduler, scaler, run_path, step_no, results):
     checkpoints_path = f"{run_path}/checkpoints"
     os.makedirs(checkpoints_path, exist_ok=True)
 
+    unwrapped = model._orig_mod if hasattr(model, "_orig_mod") else model
     checkpoint = {
-        "model_state_dict": model.state_dict(),
+        "model_state_dict": unwrapped.state_dict(),
         "optimizer_state_dict": optimiser.state_dict(),
         "scheduler_state_dict": lr_scheduler.state_dict(),
         "scaler_state_dict": scaler.state_dict(),
@@ -245,6 +249,8 @@ def save_checkpoint(model, optimiser, lr_scheduler, scaler, run_path, step_no, r
     }
 
     torch.save(checkpoint, f"{checkpoints_path}/{step_no}.pt")
+    with open(f"{run_path}/results.json", "w") as f:
+        json.dump(results, f)
     logging.info(f"Checkpoint saved at step {step_no}")
     return None
 
@@ -286,14 +292,13 @@ def create_training_objects(model, config):
     return criterion, optimiser, lr_scheduler, scaler
 
 
-def create_run(model, train_config):
+def create_run(model, config):
     results = []
 
-    # Move model to device before creating training objects
-    device = torch.device(train_config["train"]["device"])
+    device = torch.device(config["train"]["device"])
     model.to(device)
 
-    criterion, optimiser, lr_scheduler, scaler = create_training_objects(model, train_config)
+    criterion, optimiser, lr_scheduler, scaler = create_training_objects(model, config)
 
     return {
         "model": model,
@@ -306,22 +311,19 @@ def create_run(model, train_config):
     }
 
 
-def load_run(run_path, model, train_config):
-    # Check for existing checkpoints
+def load_run(run_path, model, config):
     checkpoints = [f for f in os.listdir(run_path + "/checkpoints") if f.endswith(".pt")]
     if not checkpoints:
         raise FileNotFoundError(f"No checkpoints found in {run_path}")
 
     checkpoint_latest_step = max([int(checkpoint.split(".")[0]) for checkpoint in checkpoints])
 
-    # Move model to device BEFORE loading checkpoint
-    device = torch.device(train_config["train"]["device"])
+    device = torch.device(config["train"]["device"])
     model.to(device)
 
     checkpoint = load_checkpoint(run_path, checkpoint_latest_step, device)
 
-    # Create and load training objects
-    criterion, optimiser, lr_scheduler, scaler = create_training_objects(model, train_config)
+    criterion, optimiser, lr_scheduler, scaler = create_training_objects(model, config)
 
     model.load_state_dict(checkpoint["model_state_dict"])
     optimiser.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -389,7 +391,7 @@ def train(model, dataloaders, tokenizer, config):
         train_config["effective_batch_token_size"] // train_config["minibatch_token_size"]
     )
 
-    results = train_loop(
+    train_loop(
         model,
         dataloaders,
         criterion,
@@ -408,4 +410,5 @@ def train(model, dataloaders, tokenizer, config):
         results=results,
         step_no=step_no,
     )
-    return results
+
+    return None

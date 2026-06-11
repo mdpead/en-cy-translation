@@ -1,4 +1,4 @@
-from src import datasets, tokenizer, model, train, utils, generation, dataloader
+from src import datasets, tokenizer, model, train, utils, dataloader
 import logging
 import argparse
 import yaml
@@ -6,7 +6,7 @@ import yaml
 logging.basicConfig(level=logging.INFO)
 
 parser = argparse.ArgumentParser()
-parser.add_argument("config", help="Config name (e.g. base, test)")
+parser.add_argument("--config", required=True, help="Config name (e.g. base, test)")
 args = parser.parse_args()
 
 with open(f"configs/{args.config}.yaml") as f:
@@ -24,6 +24,4 @@ dataloaders = dataloader.create_dataloaders(ds_tokenized, config)
 
 transformer = model.build_transformer(config)
 
-results = train.train(transformer, dataloaders, token, config)
-
-logging.info(results)
+train.train(transformer, dataloaders, token, config)
