@@ -13,11 +13,11 @@ model:
 
 train:
   effective_batch_token_size: 20000
-  minibatch_token_size: 512
+  minibatch_token_size: 8192
   learning_rate: 1.0e-4  # 1 / (D_MODEL * WARM_UP_STEPS) ** 0.5
   adam_betas: [0.9, 0.98]
   adam_eps: 1.0e-9
-  num_steps: 20
+  num_steps: 200
   label_smoothing: 0.1
   device: cuda
   checkpoint_steps: 5

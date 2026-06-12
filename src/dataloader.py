@@ -4,23 +4,22 @@ from torch.utils.data.sampler import BatchSampler
 import random
 from functools import partial
 
-SEED = 0
-
-
 class TokenSampler(BatchSampler):
-    def __init__(self, ds, token_batch_size):
+    def __init__(self, ds, token_batch_size, seed):
         self.token_batch_size = token_batch_size
+        self.seed = seed
         self.batches = self.generate_batches(ds)
 
     def generate_batches(self, ds):
 
         # Create batches based on token counts
-        lengths = list(zip(ds["idx"], ds["en_token_length"]))
-        lengths_sorted = sorted(lengths, key=lambda x: x[1])
+        lengths = list(zip(ds["idx"], ds["en_token_length"], ds["cy_token_length"]))
+        lengths_sorted = sorted(lengths, key=lambda x: max(x[1], x[2]))
         batches = []
         batch = []
         batch_token_count = 0
-        for idx, token_count in lengths_sorted:
+        for idx, en_len, cy_len in lengths_sorted:
+            token_count = max(en_len, cy_len)
             if batch_token_count + token_count > self.token_batch_size and batch:
                 batches.append(batch)
                 batch = []
@@ -34,7 +33,7 @@ class TokenSampler(BatchSampler):
 
     def __iter__(self):
         # Shuffle batches to introduce randomness
-        rng = random.Random(SEED)
+        rng = random.Random(self.seed)
         while True:
             batches = rng.sample(self.batches, len(self.batches))
             for batch in batches:
@@ -85,7 +84,7 @@ def create_dataloaders(
         dataloaders[split] = DataLoader(
             ds_tokenized[split],
             batch_sampler=TokenSampler(
-                ds_tokenized[split], config["train"]["minibatch_token_size"]
+                ds_tokenized[split], config["train"]["minibatch_token_size"], config["seed"]
             ),
             collate_fn=partial(collate_batch, pad_token_id=config["tokenizer"]["pad_token_id"]),
             pin_memory=True,
