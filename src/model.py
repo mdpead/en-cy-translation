@@ -281,7 +281,7 @@ def build_transformer(config):
         model_config["d_ff"],
         model_config["num_enc_layers"],
         model_config["num_dec_layers"],
-        model_config["vocab_size"],
+        config["tokenizer"]["vocab_size"],
         model_config["max_length"],
         model_config["dropout"],
     )

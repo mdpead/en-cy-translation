@@ -1,3 +1,4 @@
+import re
 import torch
 
 
@@ -31,4 +32,6 @@ def generate_texts(model, tokenizer, input_texts, max_length, device):
                 break
 
     model.train(training)
-    return tokenizer.batch_decode(tgt_input_ids, skip_special_tokens=True)
+    texts = tokenizer.batch_decode(tgt_input_ids, skip_special_tokens=True)
+    texts = [re.sub(r"(?<=\w) ' (?=\w)", "'", t) for t in texts]
+    return texts

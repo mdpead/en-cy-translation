@@ -178,6 +178,8 @@ def train_loop(
             continue
 
         # Step optimiser and scheduler
+        scaler.unscale_(optimiser)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         scaler.step(optimiser)
         scaler.update()
         lr_scheduler.step()
@@ -245,7 +247,6 @@ def save_checkpoint(model, optimiser, lr_scheduler, scaler, run_path, step_no, r
         "scheduler_state_dict": lr_scheduler.state_dict(),
         "scaler_state_dict": scaler.state_dict(),
         "step_no": step_no,
-        "results": results,
     }
 
     torch.save(checkpoint, f"{checkpoints_path}/{step_no}.pt")
@@ -329,9 +330,9 @@ def load_run(run_path, model, config):
     optimiser.load_state_dict(checkpoint["optimizer_state_dict"])
     lr_scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
     scaler.load_state_dict(checkpoint["scaler_state_dict"])
-    results = checkpoint["results"]
-    # Use the step_no from the checkpoint to ensure consistency
     step_no = checkpoint["step_no"]
+    results_path = f"{run_path}/results.json"
+    results = json.load(open(results_path)) if os.path.exists(results_path) else []
 
     return {
         "model": model,

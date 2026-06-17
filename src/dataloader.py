@@ -88,5 +88,7 @@ def create_dataloaders(
             ),
             collate_fn=partial(collate_batch, pad_token_id=config["tokenizer"]["pad_token_id"]),
             pin_memory=True,
+            num_workers=4,
+            persistent_workers=True,
         )
     return dataloaders

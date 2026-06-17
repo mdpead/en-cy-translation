@@ -11,11 +11,9 @@ from src import utils
 def create_tokenizer(ds, tokenizer_config):
     tokenizer = Tokenizer(models.WordPiece(unk_token="[UNK]"))
     tokenizer.normalizer = normalizers.Sequence(
-        [normalizers.NFD(), normalizers.Lowercase(), normalizers.StripAccents()]
+        [normalizers.NFD(), normalizers.StripAccents()]
     )
-    tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
-        [pre_tokenizers.WhitespaceSplit(), pre_tokenizers.Punctuation()]
-    )
+    tokenizer.pre_tokenizer = pre_tokenizers.WhitespaceSplit()
     special_tokens = ["[BOS]", "[EOS]", "[PAD]", "[MASK]", "[UNK]"]
     tokenizer.model = models.WordPiece(unk_token="[UNK]")
     trainer = trainers.WordPieceTrainer(

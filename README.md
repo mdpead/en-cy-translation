@@ -1,14 +1,38 @@
+---
+language:
+  - en
+  - cy
+tags:
+  - translation
+  - en-cy
+license: cc-by-4.0
+---
+
 # English → Welsh Neural Machine Translation
 
 A Transformer-based sequence-to-sequence model for English to Welsh translation, implemented from scratch in PyTorch.
 
-## Overview
+## Usage
 
-This project trains an encoder-decoder Transformer (as described in *Attention Is All You Need*) on a bilingual English–Welsh corpus. The model, tokenizer, and training loop are all implemented from scratch without relying on pre-built sequence model libraries.
+```python
+from transformers import pipeline
+pipe = pipeline("translation", model="mdpead/en-cy-translation")
+pipe("Hello, how are you?")
+```
 
-**Training data:** [`techiaith/cardiff-university-tm-en-cy`](https://huggingface.co/datasets/techiaith/cardiff-university-tm-en-cy) (Cardiff University Translation Memory)  
-**Benchmark:** [`openlanguagedata/flores_plus`](https://huggingface.co/datasets/openlanguagedata/flores_plus)  
-**Evaluation metric:** BLEU (via sacrebleu)
+Or with the model and tokenizer directly:
+
+```python
+from src.hf_wrapper import EnCyForTranslation
+from transformers import PreTrainedTokenizerFast
+
+model = EnCyForTranslation.from_pretrained("mdpead/en-cy-translation")
+tokenizer = PreTrainedTokenizerFast.from_pretrained("mdpead/en-cy-translation")
+
+inputs = tokenizer("Hello, how are you?", return_tensors="pt")
+output_ids = model.generate(**inputs, max_length=256)
+print(tokenizer.decode(output_ids[0], skip_special_tokens=True))
+```
 
 ## Architecture
 
@@ -19,11 +43,19 @@ This project trains an encoder-decoder Transformer (as described in *Attention I
 | Attention heads | 8 |
 | Encoder / Decoder layers | 6 / 6 |
 | Feed-forward dim (`d_ff`) | 2048 |
-| Vocabulary size | 10,000 |
-| Max sequence length | 1,024 tokens |
+| Vocabulary size | 16,000 |
+| Max sequence length | 256 tokens |
 | Tokenizer | WordPiece (shared bilingual vocabulary) |
 
 Training uses mixed-precision (AMP), gradient accumulation, and a warmup inverse square-root learning rate schedule.
+
+## Training
+
+- **Dataset**: [techiaith/cardiff-university-tm-en-cy](https://huggingface.co/datasets/techiaith/cardiff-university-tm-en-cy) (~1.3M sentence pairs)
+- **Steps**: 50,000
+- **Effective batch size**: 25,000 tokens
+- **Optimiser**: AdamW (β₁=0.9, β₂=0.98, ε=1e-9)
+- **Learning rate**: 1e-3 with 2,000 warmup steps, inverse square root decay
 
 ## Setup
 
@@ -33,56 +65,29 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Training
-
 ```bash
-python scripts/train.py base
+python scripts/train.py --config base
 ```
 
-Pass any config name from [configs/](configs/) as the argument. A `test` config is provided for quick smoke-test runs:
-
-```bash
-python scripts/train.py test
-```
-
-Checkpoints are saved to `./runs/<run-name>/checkpoints/` every `checkpoint_steps` steps. Training automatically resumes from the latest checkpoint if one exists.
-
-## Configuration
-
-Configs live in [configs/](configs/) as YAML files. Key options:
-
-```yaml
-model:
-  d_model: 512          # embedding dimension
-  num_heads: 8          # attention heads
-  num_enc_layers: 6     # encoder depth
-  num_dec_layers: 6     # decoder depth
-  d_ff: 2048            # feed-forward hidden dim
-  vocab_size: 10000
-  max_length: 1024
-
-train:
-  effective_batch_token_size: 20000   # tokens per gradient step (via accumulation)
-  minibatch_token_size: 512           # tokens per forward pass
-  learning_rate: 1.0e-4
-  num_steps: 3000
-  warm_up_steps: 50
-  checkpoint_steps: 5
-  validation_steps: 10
-  device: cuda
-```
+Checkpoints are saved to `runs/<run-name>/checkpoints/` every `checkpoint_steps` steps. Training resumes automatically from the latest checkpoint.
 
 ## Project Structure
 
 ```
 ├── configs/          # YAML training configs
 ├── scripts/
-│   └── train.py      # Training entry point
+│   ├── train.py      # Training entry point
+│   └── push_to_hub.py
 └── src/
     ├── model.py      # Transformer implementation
     ├── tokenizer.py  # WordPiece tokenizer
     ├── datasets.py   # Dataset loading
-    ├── dataloader.py # DataLoader creation
-    ├── train.py      # Training loop, checkpointing, LR schedule
-    └── generation.py # Autoregressive decoding
+    ├── dataloader.py # Token-bucketed DataLoader
+    ├── train.py      # Training loop and checkpointing
+    ├── generation.py # Autoregressive decoding
+    └── hf_wrapper.py # HuggingFace PreTrainedModel wrapper
 ```
+
+## License
+
+CC BY 4.0 — derived from the [Cardiff University Translation Memory](https://huggingface.co/datasets/techiaith/cardiff-university-tm-en-cy) dataset, also licensed CC BY 4.0. Attribution to Cardiff University Language Technologies Unit.

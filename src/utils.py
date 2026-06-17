@@ -11,7 +11,7 @@ def get_run_path(config):
     return f"{config['locations']['runs_dir']}/{config['name']}"
 
 
-RESUMABLE_KEYS = {"train": {"num_steps", "checkpoint_steps", "validation_steps", "validation_batches"}}
+RESUMABLE_KEYS = {"train": {"num_steps", "checkpoint_steps", "validation_steps", "validation_batches", "minibatch_token_size"}}
 
 
 def _config_requires_restart(existing, current):
