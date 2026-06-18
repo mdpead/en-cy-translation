@@ -134,6 +134,7 @@ def train_loop(
     max_length,
     results,
     step_no,
+    cache_clear_steps=None,
 ):
 
     # Initialise values - need to do learning rate, optimiser state, scaler state loading here too
@@ -179,7 +180,7 @@ def train_loop(
 
         # Step optimiser and scheduler
         scaler.unscale_(optimiser)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         scaler.step(optimiser)
         scaler.update()
         lr_scheduler.step()
@@ -198,6 +199,7 @@ def train_loop(
         result["learning_rate"] = lr_scheduler.get_last_lr()[0]
         result["loss"] = total_loss
         result["token_length"] = batch["src_input_ids"].shape[1]
+        result["grad_norm"] = grad_norm.item()
         results.append(result)
         logging.info(result)
 
@@ -228,6 +230,8 @@ def train_loop(
 
         # Delete tensors to free up memory
         del batch, logits, loss, scaled_loss
+        if cache_clear_steps and step_no % cache_clear_steps == 0:
+            torch.cuda.empty_cache()
 
         # Stop after num_steps
         if step_no >= num_steps:
@@ -410,6 +414,7 @@ def train(model, dataloaders, tokenizer, config):
         max_length=config["model"]["max_length"],
         results=results,
         step_no=step_no,
+        cache_clear_steps=train_config.get("cache_clear_steps"),
     )
 
     return None

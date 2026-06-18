@@ -1,7 +1,7 @@
 import os
 import torch
 import torch.nn as nn
-from transformers import PretrainedConfig, PreTrainedModel
+from transformers import PretrainedConfig, PreTrainedModel, GenerationMixin
 from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
 
 from src.model import Transformer
@@ -26,6 +26,7 @@ class EnCyConfig(PretrainedConfig):
         decoder_start_token_id=0,
         **kwargs,
     ):
+        kwargs.setdefault("is_encoder_decoder", True)
         super().__init__(
             pad_token_id=pad_token_id,
             bos_token_id=bos_token_id,
@@ -39,22 +40,24 @@ class EnCyConfig(PretrainedConfig):
         self.d_ff = d_ff
         self.num_enc_layers = num_enc_layers
         self.num_dec_layers = num_dec_layers
+        self.num_hidden_layers = num_dec_layers
         self.max_length = max_length
         self.dropout = dropout
 
 
-class _EncoderWrapper:
-    """Callable wrapper around transformer.encode() returning BaseModelOutput."""
+class _EncoderWrapper(torch.nn.Module):
+    """Wrapper around transformer.encode() returning BaseModelOutput."""
     def __init__(self, transformer):
+        super().__init__()
         self._transformer = transformer
 
-    def __call__(self, input_ids, attention_mask=None, **kwargs):
+    def forward(self, input_ids, attention_mask=None, **kwargs):
         mask = attention_mask.bool() if attention_mask is not None else None
         hidden = self._transformer.encode(input_ids, mask)
         return BaseModelOutput(last_hidden_state=hidden)
 
 
-class EnCyForTranslation(PreTrainedModel):
+class EnCyForTranslation(PreTrainedModel, GenerationMixin):
     config_class = EnCyConfig
 
     def __init__(self, config):
@@ -85,7 +88,10 @@ class EnCyForTranslation(PreTrainedModel):
         **kwargs,
     ):
         src_mask = attention_mask.bool() if attention_mask is not None else None
-        tgt_mask = decoder_attention_mask.bool() if decoder_attention_mask is not None else None
+        if decoder_attention_mask is not None:
+            tgt_mask = decoder_attention_mask.bool()
+        else:
+            tgt_mask = torch.ones(decoder_input_ids.shape, dtype=torch.bool, device=decoder_input_ids.device)
 
         if encoder_outputs is None:
             enc = self.transformer.encode(input_ids, src_mask)

@@ -23,6 +23,8 @@ train:
   warm_up_steps: 2000
   validation_steps: 1000
   validation_batches: 10
+  num_workers: 0
+  cache_clear_steps: 100
   compile_model: false
 
 data:

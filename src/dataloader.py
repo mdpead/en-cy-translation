@@ -81,6 +81,7 @@ def create_dataloaders(
 
     dataloaders = {}
     for split in ["train", "test"]:
+        is_train = split == "train"
         dataloaders[split] = DataLoader(
             ds_tokenized[split],
             batch_sampler=TokenSampler(
@@ -88,7 +89,7 @@ def create_dataloaders(
             ),
             collate_fn=partial(collate_batch, pad_token_id=config["tokenizer"]["pad_token_id"]),
             pin_memory=True,
-            num_workers=4,
-            persistent_workers=True,
+            num_workers=config["train"].get("num_workers", 0) if is_train else 0,
+            persistent_workers=is_train and config["train"].get("num_workers", 0) > 0,
         )
     return dataloaders
