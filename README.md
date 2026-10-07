@@ -63,7 +63,7 @@ Training uses mixed-precision (AMP), gradient accumulation, and a warmup inverse
 
 ## Benchmark
 
-Evaluated with beam search (beam size 4) against three publicly available EN→CY models across three datasets:
+Evaluated with beam search (beam size 4) against three publicly available EN→CY models across three datasets. NLLB-200 1.3B was run in fp16; all other models in fp32.
 
 - **FLORES+**: [`openlanguagedata/flores_plus`](https://huggingface.co/datasets/openlanguagedata/flores_plus) devtest split (1012 sentences, Wikipedia text)
 - **Cardiff**: [`techiaith/cardiff-university-tm-en-cy`](https://huggingface.co/datasets/techiaith/cardiff-university-tm-en-cy) 10% held-out test split (1000 sentences, institutional text)
@@ -74,27 +74,27 @@ Evaluated with beam search (beam size 4) against three publicly available EN→C
 | Model | Params | BLEU | spBLEU | chrF | chrF++ |
 |-------|--------|------|--------|------|--------|
 | **en-cy-translation** | ~50M | **46.29** | **51.89** | **68.39** | **66.38** |
-| NLLB-200 (distilled) | 600M | 36.14 | 37.57 | 58.61 | 56.55 |
+| NLLB-200 (distilled 1.3B) | 1.3B | 44.65 | 48.16 | 66.10 | 64.15 |
+| NLLB-200 (distilled 600M) | 600M | 36.14 | 37.57 | 58.61 | 56.55 |
 | Opus-MT | 74M | 13.94 | 13.74 | 33.82 | 32.25 |
-| Small-100 | 330M | 1.96 | 2.86 | 18.83 | 16.14 |
 
 ### Cardiff University TM (in-distribution, institutional)
 
 | Model | BLEU | spBLEU | chrF | chrF++ |
 |-------|------|--------|------|--------|
 | **en-cy-translation** | **57.49** | **63.87** | **76.77** | **74.64** |
-| NLLB-200 (distilled) | 37.10 | 39.51 | 61.36 | 58.69 |
+| NLLB-200 (distilled 1.3B) | 44.83 | 49.40 | 67.73 | 65.16 |
+| NLLB-200 (distilled 600M) | 37.10 | 39.51 | 61.36 | 58.69 |
 | Opus-MT | 11.05 | 10.69 | 31.19 | 29.17 |
-| Small-100 | 1.54 | 2.02 | 17.25 | 14.52 |
 
 ### Tatoeba (casual, short sentences)
 
 | Model | BLEU | spBLEU | chrF | chrF++ |
 |-------|------|--------|------|--------|
 | **en-cy-translation** | **47.37** | **50.21** | **66.57** | **64.22** |
-| NLLB-200 (distilled) | 39.12 | 39.15 | 58.21 | 56.17 |
+| NLLB-200 (distilled 1.3B) | 45.13 | 46.59 | 63.93 | 61.80 |
+| NLLB-200 (distilled 600M) | 39.12 | 39.15 | 58.21 | 56.17 |
 | Opus-MT | 29.86 | 30.11 | 48.25 | 46.72 |
-| Small-100 | 0.52 | 0.75 | 11.63 | 10.84 |
 
 ## Setup
 
