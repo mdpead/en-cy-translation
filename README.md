@@ -69,6 +69,8 @@ Evaluated with beam search (beam size 4) against three publicly available EN→C
 - **Cardiff**: [`techiaith/cardiff-university-tm-en-cy`](https://huggingface.co/datasets/techiaith/cardiff-university-tm-en-cy) 10% held-out test split (1000 sentences, institutional text)
 - **Tatoeba**: [`agentlans/tatoeba-english-translations`](https://huggingface.co/datasets/agentlans/tatoeba-english-translations) Welsh subset (1613 sentences, casual/short)
 
+FLORES+ devtest has been checked against the Cardiff training split on both the English and Welsh sides: no exact or normalised (case, punctuation and whitespace) matches, and no FLORES+ sentence shares 50% or more of its 8-grams with the training data. Reproduce with `python scripts/check_overlap.py --config base`.
+
 ### FLORES+ (out-of-distribution, Wikipedia)
 
 | Model | Params | BLEU | spBLEU | chrF | chrF++ |
@@ -116,6 +118,7 @@ Checkpoints are saved to `runs/<run-name>/checkpoints/` every `checkpoint_steps`
 ├── configs/          # YAML training configs
 ├── scripts/
 │   ├── train.py      # Training entry point
+│   ├── check_overlap.py  # FLORES+ / training data overlap check
 │   └── push_to_hub.py
 └── src/
     ├── model.py      # Transformer implementation
