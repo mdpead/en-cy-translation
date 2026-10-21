@@ -1,7 +1,10 @@
+from collections.abc import Callable
+from typing import Any
+
 import datasets as hf_datasets
 
 
-def _load_cardiff(ds_config, seed):
+def _load_cardiff(ds_config: dict[str, Any], seed: int) -> hf_datasets.DatasetDict:
     ds = hf_datasets.load_dataset("techiaith/cardiff-university-tm-en-cy")
     train = ds["train"]
     if "sample_size" in ds_config:
@@ -9,20 +12,22 @@ def _load_cardiff(ds_config, seed):
     return train.train_test_split(test_size=ds_config["test_split_ratio"], seed=seed)
 
 
-def _load_flores(ds_config, _seed):
+def _load_flores(
+    ds_config: dict[str, Any], _seed: int
+) -> hf_datasets.DatasetDict | dict[str, hf_datasets.Dataset]:
     ds = hf_datasets.load_dataset("openlanguagedata/flores_plus")
     if "sample_size" in ds_config:
         ds = {split: ds[split].select(range(ds_config["sample_size"])) for split in ds}
     return ds
 
 
-LOADERS = {
+LOADERS: dict[str, Callable[[dict[str, Any], int], Any]] = {
     "techiaith/cardiff-university-tm-en-cy": _load_cardiff,
     "openlanguagedata/flores_plus": _load_flores,
 }
 
 
-def get_dataset(key, config):
+def get_dataset(key: str, config: dict[str, Any]) -> Any:
     ds_config = config["data"][key]
     name = ds_config["ds"]
     loader = LOADERS.get(name)

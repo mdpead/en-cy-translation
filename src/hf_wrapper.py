@@ -1,4 +1,6 @@
 import os
+from typing import Any
+
 import torch
 import torch.nn as nn
 from transformers import PretrainedConfig, PreTrainedModel, GenerationMixin
@@ -12,20 +14,20 @@ class EnCyConfig(PretrainedConfig):
 
     def __init__(
         self,
-        vocab_size=16000,
-        d_model=512,
-        num_heads=8,
-        d_ff=2048,
-        num_enc_layers=6,
-        num_dec_layers=6,
-        max_length=256,
-        dropout=0.1,
-        pad_token_id=2,
-        bos_token_id=0,
-        eos_token_id=1,
-        decoder_start_token_id=0,
-        **kwargs,
-    ):
+        vocab_size: int = 16000,
+        d_model: int = 512,
+        num_heads: int = 8,
+        d_ff: int = 2048,
+        num_enc_layers: int = 6,
+        num_dec_layers: int = 6,
+        max_length: int = 256,
+        dropout: float = 0.1,
+        pad_token_id: int = 2,
+        bos_token_id: int = 0,
+        eos_token_id: int = 1,
+        decoder_start_token_id: int = 0,
+        **kwargs: Any,
+    ) -> None:
         kwargs.setdefault("is_encoder_decoder", True)
         super().__init__(
             pad_token_id=pad_token_id,
@@ -47,12 +49,20 @@ class EnCyConfig(PretrainedConfig):
 
 class _EncoderWrapper(torch.nn.Module):
     """Wrapper around transformer.encode() returning BaseModelOutput."""
-    def __init__(self, transformer):
+    def __init__(self, transformer: Transformer) -> None:
         super().__init__()
         self._transformer = transformer
 
-    def forward(self, input_ids, attention_mask=None, **kwargs):
-        mask = attention_mask.bool() if attention_mask is not None else None
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        **kwargs: Any,
+    ) -> BaseModelOutput:
+        if attention_mask is not None:
+            mask = attention_mask.bool()
+        else:
+            mask = torch.ones(input_ids.shape, dtype=torch.bool, device=input_ids.device)
         hidden = self._transformer.encode(input_ids, mask)
         return BaseModelOutput(last_hidden_state=hidden)
 
@@ -60,7 +70,7 @@ class _EncoderWrapper(torch.nn.Module):
 class EnCyForTranslation(PreTrainedModel, GenerationMixin):
     config_class = EnCyConfig
 
-    def __init__(self, config):
+    def __init__(self, config: EnCyConfig) -> None:
         super().__init__(config)
         self.transformer = Transformer(
             d_model=config.d_model,
@@ -74,20 +84,35 @@ class EnCyForTranslation(PreTrainedModel, GenerationMixin):
         )
         self.post_init()
 
-    def get_encoder(self):
+    def get_encoder(self) -> _EncoderWrapper:
         return _EncoderWrapper(self.transformer)
 
     def forward(
         self,
-        input_ids=None,
-        attention_mask=None,
-        decoder_input_ids=None,
-        decoder_attention_mask=None,
-        encoder_outputs=None,
-        labels=None,
-        **kwargs,
-    ):
-        src_mask = attention_mask.bool() if attention_mask is not None else None
+        input_ids: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        decoder_input_ids: torch.Tensor | None = None,
+        decoder_attention_mask: torch.Tensor | None = None,
+        encoder_outputs: BaseModelOutput | None = None,
+        labels: torch.Tensor | None = None,
+        **kwargs: Any,
+    ) -> Seq2SeqLMOutput:
+        if decoder_input_ids is None:
+            raise ValueError("decoder_input_ids must be provided")
+
+        if encoder_outputs is None:
+            if input_ids is None:
+                raise ValueError("Either input_ids or encoder_outputs must be provided")
+            src_shape, src_device = input_ids.shape, input_ids.device
+        else:
+            src_shape = encoder_outputs.last_hidden_state.shape[:2]
+            src_device = encoder_outputs.last_hidden_state.device
+
+        if attention_mask is not None:
+            src_mask = attention_mask.bool()
+        else:
+            src_mask = torch.ones(src_shape, dtype=torch.bool, device=src_device)
+
         if decoder_attention_mask is not None:
             tgt_mask = decoder_attention_mask.bool()
         else:
@@ -115,12 +140,12 @@ class EnCyForTranslation(PreTrainedModel, GenerationMixin):
 
     def prepare_inputs_for_generation(
         self,
-        decoder_input_ids,
-        past_key_values=None,
-        attention_mask=None,
-        encoder_outputs=None,
-        **kwargs,
-    ):
+        decoder_input_ids: torch.Tensor,
+        past_key_values: Any = None,
+        attention_mask: torch.Tensor | None = None,
+        encoder_outputs: BaseModelOutput | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         return {
             "input_ids": None,
             "encoder_outputs": encoder_outputs,
@@ -129,7 +154,7 @@ class EnCyForTranslation(PreTrainedModel, GenerationMixin):
         }
 
     @classmethod
-    def from_run(cls, run_path):
+    def from_run(cls, run_path: str) -> "EnCyForTranslation":
         from src.utils import load_config
         config_dict = load_config(run_path)
         model_cfg = config_dict["model"]

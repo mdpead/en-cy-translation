@@ -1,3 +1,7 @@
+from collections.abc import Callable, Iterator
+from typing import Any
+
+from datasets import Dataset, DatasetDict
 from torch.utils.data import DataLoader
 import torch
 from torch.utils.data.sampler import BatchSampler
@@ -5,18 +9,18 @@ import random
 from functools import partial
 
 class TokenSampler(BatchSampler):
-    def __init__(self, ds, token_batch_size, seed):
+    def __init__(self, ds: Dataset, token_batch_size: int, seed: int) -> None:
         self.token_batch_size = token_batch_size
         self.seed = seed
         self.batches = self.generate_batches(ds)
 
-    def generate_batches(self, ds):
+    def generate_batches(self, ds: Dataset) -> list[list[int]]:
 
         # Create batches based on token counts
         lengths = list(zip(ds["idx"], ds["en_token_length"], ds["cy_token_length"]))
         lengths_sorted = sorted(lengths, key=lambda x: max(x[1], x[2]))
-        batches = []
-        batch = []
+        batches: list[list[int]] = []
+        batch: list[int] = []
         batch_token_count = 0
         for idx, en_len, cy_len in lengths_sorted:
             token_count = max(en_len, cy_len)
@@ -31,7 +35,7 @@ class TokenSampler(BatchSampler):
 
         return batches
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[list[int]]:
         # Shuffle batches to introduce randomness
         rng = random.Random(self.seed)
         while True:
@@ -39,13 +43,13 @@ class TokenSampler(BatchSampler):
             for batch in batches:
                 yield batch
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.batches)
 
 
-def collate_batch(batch, pad_token_id):
+def collate_batch(batch: list[dict[str, Any]], pad_token_id: int) -> dict[str, Any]:
 
-    output = {}
+    output: dict[str, Any] = {}
     for type in ["src", "tgt"]:
         lang = "en" if type == "src" else "cy"
         input_tokens = [item[f"text_{lang}_tokenized"] for item in batch]
@@ -67,19 +71,19 @@ def collate_batch(batch, pad_token_id):
     return output
 
 
-def make_collate_fn(pad_token_id):
-    def collate_fn(x):
+def make_collate_fn(pad_token_id: int) -> Callable[[list[dict[str, Any]]], dict[str, Any]]:
+    def collate_fn(x: list[dict[str, Any]]) -> dict[str, Any]:
         return collate_batch(x, pad_token_id)
 
     return collate_fn
 
 
 def create_dataloaders(
-    ds_tokenized,
-    config,
-):
+    ds_tokenized: DatasetDict,
+    config: dict[str, Any],
+) -> dict[str, DataLoader]:
 
-    dataloaders = {}
+    dataloaders: dict[str, DataLoader] = {}
     for split in ["train", "test"]:
         is_train = split == "train"
         dataloaders[split] = DataLoader(

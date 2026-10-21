@@ -10,6 +10,11 @@ from src import generation
 import os
 import itertools
 import json
+from collections.abc import Iterable
+from typing import Any
+
+from torch.utils.data import DataLoader
+from transformers import PreTrainedTokenizerBase
 from src import utils
 
 MODEL_INPUTS = [
@@ -45,7 +50,13 @@ class WarmupInverseSquareRootLR(LRScheduler):
         return lrs
 
 
-def generate_metrics(model, batch, max_length, tokenizer, device):
+def generate_metrics(
+    model: nn.Module,
+    batch: dict[str, Any],
+    max_length: int,
+    tokenizer: PreTrainedTokenizerBase,
+    device: torch.device,
+) -> dict[str, float]:
 
     pred_text = generation.generate_texts(
         model, tokenizer, input_texts=batch["src_text"], max_length=max_length, device=device
@@ -68,8 +79,15 @@ def generate_metrics(model, batch, max_length, tokenizer, device):
 
 
 def validation_step(
-    model, dataloader, criterion, device, tokenizer, step_no, max_length, validation_minibatches
-):
+    model: nn.Module,
+    dataloader: Iterable[dict[str, Any]],
+    criterion: nn.Module,
+    device: torch.device,
+    tokenizer: PreTrainedTokenizerBase,
+    step_no: int,
+    max_length: int,
+    validation_minibatches: int,
+) -> dict[str, Any]:
 
     model.eval()
     start_time = time.time()
@@ -103,6 +121,9 @@ def validation_step(
         if bleu_batch is None:
             bleu_batch = minibatch
 
+    if bleu_batch is None:
+        raise ValueError("Validation dataloader yielded no batches")
+
     elapsed_time = time.time() - start_time
     validation_metrics = generate_metrics(model, bleu_batch, max_length, tokenizer, device)
 
@@ -117,25 +138,25 @@ def validation_step(
 
 
 def train_loop(
-    model,
-    dataloaders,
-    criterion,
-    optimiser,
-    lr_scheduler,
-    num_steps,
-    tokenizer,
-    grad_accum_steps,
-    device,
-    checkpoint_steps,
-    run_path,
-    scaler,
-    validation_steps,
-    validation_batches,
-    max_length,
-    results,
-    step_no,
-    cache_clear_steps=None,
-):
+    model: nn.Module,
+    dataloaders: dict[str, DataLoader],
+    criterion: nn.Module,
+    optimiser: Optimizer,
+    lr_scheduler: LRScheduler,
+    num_steps: int,
+    tokenizer: PreTrainedTokenizerBase,
+    grad_accum_steps: int,
+    device: torch.device,
+    checkpoint_steps: int,
+    run_path: str,
+    scaler: amp.GradScaler,
+    validation_steps: int,
+    validation_batches: int,
+    max_length: int,
+    results: list[dict[str, Any]],
+    step_no: int,
+    cache_clear_steps: int | None = None,
+) -> None:
 
     # Initialise values - need to do learning rate, optimiser state, scaler state loading here too
     batch_tokens = 0
@@ -191,7 +212,7 @@ def train_loop(
 
         # Logging with the completed step number
         elapsed_time = time.time() - start_time
-        result = {}
+        result: dict[str, Any] = {}
         result["type"] = "train"
         result["step_no"] = step_no
         result["num_tokens"] = batch_tokens
@@ -240,7 +261,15 @@ def train_loop(
     return None
 
 
-def save_checkpoint(model, optimiser, lr_scheduler, scaler, run_path, step_no, results):
+def save_checkpoint(
+    model: nn.Module,
+    optimiser: Optimizer,
+    lr_scheduler: LRScheduler,
+    scaler: amp.GradScaler,
+    run_path: str,
+    step_no: int,
+    results: list[dict[str, Any]],
+) -> None:
     checkpoints_path = f"{run_path}/checkpoints"
     os.makedirs(checkpoints_path, exist_ok=True)
 
@@ -260,7 +289,9 @@ def save_checkpoint(model, optimiser, lr_scheduler, scaler, run_path, step_no, r
     return None
 
 
-def load_checkpoint(run_path, step_no, device=None):
+def load_checkpoint(
+    run_path: str, step_no: int, device: torch.device | None = None
+) -> dict[str, Any]:
     checkpoints_path = f"{run_path}/checkpoints"
     # Load checkpoint with device mapping if device is specified
     if device is not None:
@@ -272,7 +303,9 @@ def load_checkpoint(run_path, step_no, device=None):
     return checkpoint
 
 
-def create_training_objects(model, config):
+def create_training_objects(
+    model: nn.Module, config: dict[str, Any]
+) -> tuple[nn.CrossEntropyLoss, Optimizer, LRScheduler, amp.GradScaler]:
 
     # Define loss function, optimiser, and scheduler
     device = torch.device(config["train"]["device"])
@@ -297,8 +330,8 @@ def create_training_objects(model, config):
     return criterion, optimiser, lr_scheduler, scaler
 
 
-def create_run(model, config):
-    results = []
+def create_run(model: nn.Module, config: dict[str, Any]) -> dict[str, Any]:
+    results: list[dict[str, Any]] = []
 
     device = torch.device(config["train"]["device"])
     model.to(device)
@@ -316,7 +349,7 @@ def create_run(model, config):
     }
 
 
-def load_run(run_path, model, config):
+def load_run(run_path: str, model: nn.Module, config: dict[str, Any]) -> dict[str, Any]:
     checkpoints = [f for f in os.listdir(run_path + "/checkpoints") if f.endswith(".pt")]
     if not checkpoints:
         raise FileNotFoundError(f"No checkpoints found in {run_path}")
@@ -349,7 +382,7 @@ def load_run(run_path, model, config):
     }
 
 
-def get_run(config, model):
+def get_run(config: dict[str, Any], model: nn.Module) -> dict[str, Any]:
     run_path = utils.get_run_path(config)
     checkpoints_path = f"{run_path}/checkpoints"
     has_checkpoint = os.path.isdir(checkpoints_path) and any(
@@ -365,7 +398,12 @@ def get_run(config, model):
     return run
 
 
-def train(model, dataloaders, tokenizer, config):
+def train(
+    model: nn.Module,
+    dataloaders: dict[str, DataLoader],
+    tokenizer: PreTrainedTokenizerBase,
+    config: dict[str, Any],
+) -> list[dict[str, Any]] | None:
 
     # Set up run
     run = get_run(config, model)

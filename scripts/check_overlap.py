@@ -19,13 +19,13 @@ parser.add_argument("--config", required=True, help="Config name (e.g. base)")
 args = parser.parse_args()
 
 
-def norm(s):
+def norm(s: str) -> str:
     s = unicodedata.normalize("NFKC", s).lower()
     s = re.sub(r"[^\w\s]", " ", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
-def ngrams(tokens):
+def ngrams(tokens: list[str]) -> set[str]:
     return {" ".join(tokens[i : i + N]) for i in range(len(tokens) - N + 1)}
 
 
@@ -54,14 +54,14 @@ for side, col in (("en", "text_en"), ("cy", "text_cy")):
     normed = sum(1 for s in flores_norm if s in norm_set)
 
     # Partial overlap: share of each FLORES+ sentence's n-grams found anywhere in the training text
-    gram_owner = defaultdict(set)
-    flores_grams = []
+    gram_owner: defaultdict[str, set[int]] = defaultdict(set)
+    flores_grams: list[set[str]] = []
     for i, s in enumerate(flores_norm):
         g = ngrams(s.split())
         flores_grams.append(g)
         for x in g:
             gram_owner[x].add(i)
-    hits = defaultdict(set)
+    hits: defaultdict[int, set[str]] = defaultdict(set)
     for t in train_texts:
         for x in ngrams(norm(t).split()):
             for i in gram_owner.get(x, ()):

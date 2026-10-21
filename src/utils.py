@@ -3,18 +3,20 @@ import json
 import logging
 import shutil
 import random
+from typing import Any
+
 import numpy as np
 import torch
 
 
-def get_run_path(config):
+def get_run_path(config: dict[str, Any]) -> str:
     return f"{config['locations']['runs_dir']}/{config['name']}"
 
 
 RESUMABLE_KEYS = {"train": {"num_steps", "checkpoint_steps", "validation_steps", "validation_batches", "minibatch_token_size", "cache_clear_steps", "num_workers"}}
 
 
-def _config_requires_restart(existing, current):
+def _config_requires_restart(existing: dict[str, Any], current: dict[str, Any]) -> bool:
     for section, keys in RESUMABLE_KEYS.items():
         if section in existing and section in current:
             existing = {**existing, section: {k: v for k, v in existing[section].items() if k not in keys}}
@@ -22,14 +24,14 @@ def _config_requires_restart(existing, current):
     return existing != current
 
 
-def set_seed(seed):
+def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
 
-def init_run(config):
+def init_run(config: dict[str, Any]) -> str:
     set_seed(config["seed"])
     run_path = get_run_path(config)
     os.makedirs(run_path, exist_ok=True)
@@ -44,13 +46,13 @@ def init_run(config):
     return run_path
 
 
-def save_config(run_path, config):
+def save_config(run_path: str, config: dict[str, Any]) -> str:
     filepath = f"{run_path}/config.json"
     json.dump(config, open(filepath, "w"))
     return filepath
 
 
-def load_config(run_path):
+def load_config(run_path: str) -> dict[str, Any]:
     filepath = f"{run_path}/config.json"
     with open(filepath) as f:
         config = json.load(f)

@@ -1,10 +1,12 @@
+from typing import Any
+
 from torch import nn
 import torch
 import math
 
 
 class Linear(nn.Module):
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features: int, out_features: int) -> None:
         super().__init__()
         self.weight = nn.Parameter(torch.randn(out_features, in_features))
         self.bias = nn.Parameter(torch.zeros(out_features))
@@ -16,7 +18,7 @@ class Linear(nn.Module):
 
 
 class PositionWiseFeedForward(nn.Module):
-    def __init__(self, d_model, d_ff, dropout):
+    def __init__(self, d_model: int, d_ff: int, dropout: float) -> None:
         super().__init__()
         self.linear1 = Linear(d_model, d_ff)
         self.linear2 = Linear(d_ff, d_model)
@@ -30,7 +32,7 @@ class PositionWiseFeedForward(nn.Module):
 
 
 class MixtureOfExpertsFeedForward(nn.Module):
-    def __init__(self, d_model, d_ff, num_experts, dropout):
+    def __init__(self, d_model: int, d_ff: int, num_experts: int, dropout: float) -> None:
         super().__init__()
         self.num_experts = num_experts
         self.relu = nn.ReLU()
@@ -41,7 +43,7 @@ class MixtureOfExpertsFeedForward(nn.Module):
 
 
 class LayerNorm(nn.Module):
-    def __init__(self, d_model, eps=1e-6):
+    def __init__(self, d_model: int, eps: float = 1e-6) -> None:
         super().__init__()
         self.eps = eps
         self.alpha = nn.Parameter(torch.ones(d_model))
@@ -54,7 +56,7 @@ class LayerNorm(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model, num_heads, dropout):
+    def __init__(self, d_model: int, num_heads: int, dropout: float) -> None:
         super().__init__()
         assert d_model % num_heads == 0
         self.num_heads = num_heads
@@ -65,7 +67,9 @@ class MultiHeadAttention(nn.Module):
         self.W_o = Linear(d_model, d_model)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, q, k, v, attn_mask):
+    def forward(
+        self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, attn_mask: torch.Tensor
+    ) -> torch.Tensor:
         # Create Q,K,V tensors
         Q = self.W_q(q)
         K = self.W_k(k)
@@ -95,7 +99,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class Embedding(nn.Module):
-    def __init__(self, vocab_size, d_model):
+    def __init__(self, vocab_size: int, d_model: int) -> None:
         super().__init__()
         self.E = nn.Parameter(torch.randn(vocab_size, d_model) * 0.02)
         self.d_model = d_model
@@ -106,11 +110,11 @@ class Embedding(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_length):
+    def __init__(self, d_model: int, max_length: int) -> None:
         super().__init__()
         self.register_buffer("PE", self.create_pe(d_model, max_length))
 
-    def create_pe(self, d_model, max_length):
+    def create_pe(self, d_model: int, max_length: int) -> torch.Tensor:
         PE = torch.zeros((max_length, d_model))
         positions = torch.arange(0, max_length)
         dims = torch.arange(0, d_model // 2)
@@ -136,7 +140,7 @@ class EncoderLayer(nn.Module):
         self.layer_norms = nn.ModuleList([LayerNorm(d_model) for _ in range(0, 2)])
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, src, attn_mask):
+    def forward(self, src: torch.Tensor, attn_mask: torch.Tensor) -> torch.Tensor:
         x = src
         attn_out = self.attention(x, x, x, attn_mask)
         x = self.layer_norms[0](x + self.dropout(attn_out))
@@ -146,7 +150,9 @@ class EncoderLayer(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, d_model, num_heads, d_ff, num_enc_layers, dropout):
+    def __init__(
+        self, d_model: int, num_heads: int, d_ff: int, num_enc_layers: int, dropout: float
+    ) -> None:
         super().__init__()
         self.layers = nn.ModuleList(
             [EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_enc_layers)]
@@ -156,7 +162,7 @@ class Encoder(nn.Module):
         padding_mask = q_padding_mask.unsqueeze(-1) & k_padding_mask.unsqueeze(-2)
         return padding_mask
 
-    def forward(self, src, src_padding_mask):
+    def forward(self, src: torch.Tensor, src_padding_mask: torch.Tensor) -> torch.Tensor:
         attn_mask = self.make_attn_mask(src_padding_mask, src_padding_mask)
         for layer in self.layers:
             src = layer(src, attn_mask)
@@ -172,7 +178,13 @@ class DecoderLayer(nn.Module):
         self.layer_norms = nn.ModuleList([LayerNorm(d_model) for _ in range(0, 3)])
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, src, tgt, self_attn_mask, cross_attn_mask):
+    def forward(
+        self,
+        src: torch.Tensor,
+        tgt: torch.Tensor,
+        self_attn_mask: torch.Tensor,
+        cross_attn_mask: torch.Tensor,
+    ) -> torch.Tensor:
         x = tgt
         self_attn_out = self.self_attention(tgt, tgt, tgt, self_attn_mask)
         x = self.layer_norms[0](x + self.dropout(self_attn_out))
@@ -184,13 +196,17 @@ class DecoderLayer(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, d_model, num_heads, d_ff, num_dec_layers, dropout):
+    def __init__(
+        self, d_model: int, num_heads: int, d_ff: int, num_dec_layers: int, dropout: float
+    ) -> None:
         super().__init__()
         self.layers = nn.ModuleList(
             [DecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_dec_layers)]
         )
 
-    def make_self_attn_mask(self, q_padding_mask, k_padding_mask):
+    def make_self_attn_mask(
+        self, q_padding_mask: torch.Tensor, k_padding_mask: torch.Tensor
+    ) -> torch.Tensor:
         padding_mask = q_padding_mask.unsqueeze(-1) & k_padding_mask.unsqueeze(-2)
         causal_mask = torch.tril(
             torch.ones(
@@ -200,11 +216,19 @@ class Decoder(nn.Module):
         self_attn_mask = causal_mask & padding_mask
         return self_attn_mask
 
-    def make_cross_attn_mask(self, q_padding_mask, k_padding_mask):
+    def make_cross_attn_mask(
+        self, q_padding_mask: torch.Tensor, k_padding_mask: torch.Tensor
+    ) -> torch.Tensor:
         cross_attn_mask = q_padding_mask.unsqueeze(-1) & k_padding_mask.unsqueeze(-2)
         return cross_attn_mask
 
-    def forward(self, src, tgt, src_padding_mask, tgt_padding_mask):
+    def forward(
+        self,
+        src: torch.Tensor,
+        tgt: torch.Tensor,
+        src_padding_mask: torch.Tensor,
+        tgt_padding_mask: torch.Tensor,
+    ) -> torch.Tensor:
         # Make attention masks
         self_attn_mask = self.make_self_attn_mask(tgt_padding_mask, tgt_padding_mask)
         cross_attn_mask = self.make_cross_attn_mask(tgt_padding_mask, src_padding_mask)
@@ -215,11 +239,11 @@ class Decoder(nn.Module):
 
 
 class Output(nn.Module):
-    def __init__(self, d_model, vocab_size):
+    def __init__(self, d_model: int, vocab_size: int) -> None:
         super().__init__()
         self.linear = Linear(d_model, vocab_size)
 
-    def forward(self, tgt_dec):
+    def forward(self, tgt_dec: torch.Tensor) -> torch.Tensor:
         x = self.linear(tgt_dec)
         return x
 
@@ -227,15 +251,15 @@ class Output(nn.Module):
 class Transformer(nn.Module):
     def __init__(
         self,
-        d_model,
-        num_heads,
-        d_ff,
-        num_enc_layers,
-        num_dec_layers,
-        vocab_size,
-        max_length,
-        dropout,
-    ):
+        d_model: int,
+        num_heads: int,
+        d_ff: int,
+        num_enc_layers: int,
+        num_dec_layers: int,
+        vocab_size: int,
+        max_length: int,
+        dropout: float,
+    ) -> None:
         super().__init__()
         self.src_embedding = Embedding(vocab_size, d_model)
         self.tgt_embedding = Embedding(vocab_size, d_model)
@@ -245,24 +269,36 @@ class Transformer(nn.Module):
         self.output = Output(d_model, vocab_size)
         self.dropout = nn.Dropout(dropout)
 
-    def encode(self, src, src_padding_mask):
+    def encode(self, src: torch.Tensor, src_padding_mask: torch.Tensor) -> torch.Tensor:
         src_emb = self.dropout(self.positional_encoder((self.src_embedding(src))))
         src_enc = self.encoder(src_emb, src_padding_mask)
         return src_enc
 
-    def decode(self, src_enc, tgt, src_padding_mask, tgt_padding_mask):
+    def decode(
+        self,
+        src_enc: torch.Tensor,
+        tgt: torch.Tensor,
+        src_padding_mask: torch.Tensor,
+        tgt_padding_mask: torch.Tensor,
+    ) -> torch.Tensor:
         tgt_emb = self.dropout(self.positional_encoder(self.tgt_embedding(tgt)))
         tgt_dec = self.decoder(src_enc, tgt_emb, src_padding_mask, tgt_padding_mask)
         return tgt_dec
 
-    def forward(self, src, tgt, src_padding_mask, tgt_padding_mask):
+    def forward(
+        self,
+        src: torch.Tensor,
+        tgt: torch.Tensor,
+        src_padding_mask: torch.Tensor,
+        tgt_padding_mask: torch.Tensor,
+    ) -> torch.Tensor:
         src_enc = self.encode(src, src_padding_mask)
         tgt_dec = self.decode(src_enc, tgt, src_padding_mask, tgt_padding_mask)
         out = self.output(tgt_dec)
         return out
 
 
-def init_weights(m):
+def init_weights(m: nn.Module) -> None:
     if isinstance(m, (nn.Linear, Linear)):
         nn.init.xavier_uniform_(m.weight)
         if m.bias is not None:
@@ -271,7 +307,7 @@ def init_weights(m):
         nn.init.normal_(m.E, mean=0.0, std=0.02)
 
 
-def build_transformer(config):
+def build_transformer(config: dict[str, Any]) -> Transformer:
 
     model_config = config["model"]
 

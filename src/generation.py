@@ -1,8 +1,18 @@
 import re
+
 import torch
+from transformers import PreTrainedTokenizerBase
+
+from src.model import Transformer
 
 
-def generate_texts(model, tokenizer, input_texts, max_length, device):
+def generate_texts(
+    model: Transformer,
+    tokenizer: PreTrainedTokenizerBase,
+    input_texts: list[str],
+    max_length: int,
+    device: torch.device | str,
+) -> list[str]:
     src_input_ids = tokenizer(input_texts, return_tensors="pt", padding=True, truncation=True, max_length=max_length)["input_ids"].to(device)
     src_padding_mask = (src_input_ids != tokenizer.pad_token_id).to(device)
 
