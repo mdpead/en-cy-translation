@@ -4,3 +4,4 @@ ipykernel
 datasets
 sacrebleu
 sentencepiece
+pytest
