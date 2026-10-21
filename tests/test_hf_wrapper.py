@@ -38,6 +38,32 @@ def test_forward_matches_transformer(config, transformer):
     assert out.loss is None
 
 
+def test_missing_attention_mask_attends_to_all_tokens(config, transformer):
+    hf_model = make_hf_model(config, transformer)
+    src = torch.randint(5, 50, (2, 6))
+    tgt = torch.randint(5, 50, (2, 4))
+
+    expected = hf_model(input_ids=src, attention_mask=torch.ones_like(src), decoder_input_ids=tgt).logits
+    from_ids = hf_model(input_ids=src, decoder_input_ids=tgt).logits
+    from_encoder = hf_model(encoder_outputs=hf_model.get_encoder()(src), decoder_input_ids=tgt).logits
+
+    assert torch.allclose(from_ids, expected)
+    assert torch.allclose(from_encoder, expected)
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        (dict(input_ids=torch.randint(5, 50, (1, 6))), "decoder_input_ids"),
+        (dict(decoder_input_ids=torch.randint(5, 50, (1, 4))), "input_ids or encoder_outputs"),
+    ],
+)
+def test_forward_rejects_missing_inputs(config, transformer, kwargs, message):
+    hf_model = make_hf_model(config, transformer)
+    with pytest.raises(ValueError, match=message):
+        hf_model(**kwargs)
+
+
 def test_loss_ignores_padding(config, transformer):
     hf_model = make_hf_model(config, transformer)
     src = torch.randint(5, 50, (1, 6))
