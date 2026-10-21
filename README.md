@@ -14,6 +14,8 @@ license: cc-by-4.0
 
 # English → Welsh Neural Machine Translation
 
+[![CI](https://github.com/mdpead/en-cy-translation/actions/workflows/ci.yml/badge.svg)](https://github.com/mdpead/en-cy-translation/actions/workflows/ci.yml)
+
 A Transformer-based sequence-to-sequence model for English to Welsh translation, implemented from scratch in PyTorch. Full training code available at [github.com/mdpead/en-cy-translation](https://github.com/mdpead/en-cy-translation).
 
 ## Usage
@@ -112,6 +114,11 @@ python scripts/train.py --config base
 ```
 
 Checkpoints are saved to `runs/<run-name>/checkpoints/` every `checkpoint_steps` steps. Training resumes automatically from the latest checkpoint.
+
+```bash
+pytest                                  # tests, CPU only
+ruff check . && ruff format --check .   # lint and formatting
+```
 
 ## Project Structure
 
