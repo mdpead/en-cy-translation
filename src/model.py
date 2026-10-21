@@ -1,8 +1,8 @@
+import math
 from typing import Any
 
-from torch import nn
 import torch
-import math
+from torch import nn
 
 
 class Linear(nn.Module):
@@ -270,7 +270,7 @@ class Transformer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def encode(self, src: torch.Tensor, src_padding_mask: torch.Tensor) -> torch.Tensor:
-        src_emb = self.dropout(self.positional_encoder((self.src_embedding(src))))
+        src_emb = self.dropout(self.positional_encoder(self.src_embedding(src)))
         src_enc = self.encoder(src_emb, src_padding_mask)
         return src_enc
 

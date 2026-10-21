@@ -13,7 +13,9 @@ def generate_texts(
     max_length: int,
     device: torch.device | str,
 ) -> list[str]:
-    src_input_ids = tokenizer(input_texts, return_tensors="pt", padding=True, truncation=True, max_length=max_length)["input_ids"].to(device)
+    src_input_ids = tokenizer(
+        input_texts, return_tensors="pt", padding=True, truncation=True, max_length=max_length
+    )["input_ids"].to(device)
     src_padding_mask = (src_input_ids != tokenizer.pad_token_id).to(device)
 
     input_length = src_input_ids.size(1)

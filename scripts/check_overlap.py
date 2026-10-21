@@ -1,10 +1,11 @@
+import argparse
 import re
 import sys
-import argparse
 import unicodedata
 from collections import defaultdict
 
 import yaml
+
 from datasets import load_dataset
 
 sys.path.insert(0, ".")
@@ -14,7 +15,9 @@ from src import datasets as ds_module
 N = 8  # n-gram length for partial-overlap detection
 COVERAGE_THRESHOLD = 0.5
 
-parser = argparse.ArgumentParser(description="Check FLORES+ devtest for overlap with the training split")
+parser = argparse.ArgumentParser(
+    description="Check FLORES+ devtest for overlap with the training split"
+)
 parser.add_argument("--config", required=True, help="Config name (e.g. base)")
 args = parser.parse_args()
 
@@ -67,7 +70,9 @@ for side, col in (("en", "text_en"), ("cy", "text_cy")):
             for i in gram_owner.get(x, ()):
                 hits[i].add(x)
     coverage = {i: len(hits[i]) / len(g) for i, g in enumerate(flores_grams) if g}
-    high = sorted((i for i, c in coverage.items() if c >= COVERAGE_THRESHOLD), key=lambda i: -coverage[i])
+    high = sorted(
+        (i for i, c in coverage.items() if c >= COVERAGE_THRESHOLD), key=lambda i: -coverage[i]
+    )
     any_shared = sum(1 for c in coverage.values() if c > 0)
 
     print(f"\n=== {side.upper()} ===")

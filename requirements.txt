@@ -5,3 +5,4 @@ datasets
 sacrebleu
 sentencepiece
 pytest
+ruff==0.17.1

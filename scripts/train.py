@@ -1,7 +1,9 @@
-from src import datasets, tokenizer, model, train, utils, dataloader
-import logging
 import argparse
+import logging
+
 import yaml
+
+from src import dataloader, datasets, model, tokenizer, train, utils
 
 logging.basicConfig(level=logging.INFO)
 

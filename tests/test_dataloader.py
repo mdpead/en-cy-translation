@@ -9,7 +9,9 @@ def test_token_sampler_respects_budget_and_covers_all_rows(ds_tokenized):
     ds = ds_tokenized["train"]
     budget = 30
     sampler = dataloader.TokenSampler(ds, budget, seed=0)
-    lengths = {i: max(en, cy) for i, en, cy in zip(ds["idx"], ds["en_token_length"], ds["cy_token_length"])}
+    lengths = {
+        i: max(en, cy) for i, en, cy in zip(ds["idx"], ds["en_token_length"], ds["cy_token_length"])
+    }
 
     for batch in sampler.batches:
         assert len(batch) == 1 or sum(lengths[i] for i in batch) <= budget
@@ -34,14 +36,26 @@ def test_token_sampler_iterates_forever_and_is_seeded(ds_tokenized):
     assert take(0) == take(0)
     assert take(0) != take(1)
     first_epoch = take(0)[:n]
-    assert sorted(map(tuple, first_epoch)) == sorted(map(tuple, dataloader.TokenSampler(ds, 30, seed=0).batches))
+    assert sorted(map(tuple, first_epoch)) == sorted(
+        map(tuple, dataloader.TokenSampler(ds, 30, seed=0).batches)
+    )
 
 
 def test_collate_batch_pads_and_shifts_target():
     pad = 2
     batch = [
-        {"text_en_tokenized": [0, 5, 6, 1], "text_cy_tokenized": [0, 7, 1], "text_en": "a b", "text_cy": "c"},
-        {"text_en_tokenized": [0, 8, 1], "text_cy_tokenized": [0, 9, 10, 11, 1], "text_en": "d", "text_cy": "e f g"},
+        {
+            "text_en_tokenized": [0, 5, 6, 1],
+            "text_cy_tokenized": [0, 7, 1],
+            "text_en": "a b",
+            "text_cy": "c",
+        },
+        {
+            "text_en_tokenized": [0, 8, 1],
+            "text_cy_tokenized": [0, 9, 10, 11, 1],
+            "text_en": "d",
+            "text_cy": "e f g",
+        },
     ]
     out = dataloader.collate_batch(batch, pad)
 
@@ -66,5 +80,7 @@ def test_create_dataloaders(ds_tokenized, config):
     loaders = dataloader.create_dataloaders(ds_tokenized, config)
     assert set(loaders) == {"train", "test"}
     batch = next(iter(loaders["train"]))
-    assert batch["src_input_ids"].shape[0] == batch["tgt_input_ids"].shape[0] == len(batch["src_text"])
+    assert (
+        batch["src_input_ids"].shape[0] == batch["tgt_input_ids"].shape[0] == len(batch["src_text"])
+    )
     assert batch["tgt_input_ids"].shape == batch["tgt_output_ids"].shape

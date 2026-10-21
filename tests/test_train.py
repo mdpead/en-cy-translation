@@ -42,7 +42,13 @@ def test_create_training_objects(transformer, config):
 def test_checkpoint_roundtrip(tmp_path, transformer, config):
     run = train.create_run(transformer, config)
     train.save_checkpoint(
-        transformer, run["optimiser"], run["lr_scheduler"], run["scaler"], tmp_path, 7, [{"step_no": 7}]
+        transformer,
+        run["optimiser"],
+        run["lr_scheduler"],
+        run["scaler"],
+        tmp_path,
+        7,
+        [{"step_no": 7}],
     )
 
     checkpoint = train.load_checkpoint(tmp_path, 7, torch.device("cpu"))
@@ -57,7 +63,9 @@ def test_save_checkpoint_unwraps_compiled_model(tmp_path, transformer, config):
     run = train.create_run(transformer, config)
     wrapper = torch.nn.Module()
     wrapper._orig_mod = transformer
-    train.save_checkpoint(wrapper, run["optimiser"], run["lr_scheduler"], run["scaler"], tmp_path, 1, [])
+    train.save_checkpoint(
+        wrapper, run["optimiser"], run["lr_scheduler"], run["scaler"], tmp_path, 1, []
+    )
 
     checkpoint = train.load_checkpoint(tmp_path, 1)
 
@@ -80,7 +88,9 @@ def test_get_run_creates_new_run(transformer, config):
 def test_generate_metrics_perfect_and_wrong(monkeypatch, tok):
     batch = {"src_text": ["Good morning"], "tgt_text": ["Mae'r tywydd yn braf heddiw"]}
 
-    monkeypatch.setattr(train.generation, "generate_texts", lambda *a, **k: ["Mae'r tywydd yn braf heddiw"])
+    monkeypatch.setattr(
+        train.generation, "generate_texts", lambda *a, **k: ["Mae'r tywydd yn braf heddiw"]
+    )
     assert train.generate_metrics(None, batch, 32, tok, "cpu")["bleu"] == pytest.approx(100.0)
 
     monkeypatch.setattr(train.generation, "generate_texts", lambda *a, **k: ["Ble mae"])
@@ -89,7 +99,9 @@ def test_generate_metrics_perfect_and_wrong(monkeypatch, tok):
 
 def test_validation_step_rejects_empty_dataloader(transformer, tok):
     with pytest.raises(ValueError, match="no batches"):
-        train.validation_step(transformer, [], torch.nn.CrossEntropyLoss(), torch.device("cpu"), tok, 0, 32, 1)
+        train.validation_step(
+            transformer, [], torch.nn.CrossEntropyLoss(), torch.device("cpu"), tok, 0, 32, 1
+        )
 
 
 def run_training(config, transformer, ds_tokenized, tok):

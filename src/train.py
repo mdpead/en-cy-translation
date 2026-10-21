@@ -1,21 +1,20 @@
-import torch
-from torch import nn
-from torch.optim.lr_scheduler import LRScheduler
-import logging
-import time
-from torch.optim import Optimizer
-from torch import amp
-import sacrebleu
-from src import generation
-import os
 import itertools
 import json
+import logging
+import os
+import time
 from collections.abc import Iterable
 from typing import Any
 
+import sacrebleu
+import torch
+from torch import amp, nn
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 from transformers import PreTrainedTokenizerBase
-from src import utils
+
+from src import generation, utils
 
 MODEL_INPUTS = [
     "src_input_ids",
@@ -98,7 +97,6 @@ def validation_step(
     bleu_batch = None
 
     for minibatch in itertools.islice(dataloader, validation_minibatches):
-
         minibatch = {
             k: v.to(device, non_blocking=True) if k in MODEL_INPUTS else v
             for k, v in minibatch.items()
@@ -168,14 +166,12 @@ def train_loop(
 
     model.train()
     for minibatch_idx, batch in enumerate(train_dataloader, start=minibatch_idx):
-
         # Move batch to device
         batch = {
             k: v.to(device, non_blocking=True) if k in MODEL_INPUTS else v for k, v in batch.items()
         }
 
         with amp.autocast(device_type=device.type):
-
             # Forward pass
             logits = model(
                 batch["src_input_ids"],

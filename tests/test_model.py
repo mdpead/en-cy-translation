@@ -63,7 +63,9 @@ def test_cross_attn_mask_hides_source_padding():
 def test_build_transformer_output_shape(transformer, config):
     src = torch.randint(5, 50, (2, 7))
     tgt = torch.randint(5, 50, (2, 4))
-    out = transformer(src, tgt, torch.ones(2, 7, dtype=torch.bool), torch.ones(2, 4, dtype=torch.bool))
+    out = transformer(
+        src, tgt, torch.ones(2, 7, dtype=torch.bool), torch.ones(2, 4, dtype=torch.bool)
+    )
     assert out.shape == (2, 4, config["tokenizer"]["vocab_size"])
 
 

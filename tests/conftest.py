@@ -2,8 +2,8 @@ import copy
 
 import pytest
 import torch
-from datasets import Dataset, DatasetDict
 
+from datasets import Dataset, DatasetDict
 from src import model, tokenizer
 
 PAIRS = [
@@ -61,7 +61,9 @@ def config(tmp_path):
 @pytest.fixture
 def raw_ds():
     def split(pairs):
-        return Dataset.from_dict({"text_en": [en for en, _ in pairs], "text_cy": [cy for _, cy in pairs]})
+        return Dataset.from_dict(
+            {"text_en": [en for en, _ in pairs], "text_cy": [cy for _, cy in pairs]}
+        )
 
     return DatasetDict(train=split(PAIRS * 4), test=split(PAIRS))
 
@@ -69,7 +71,9 @@ def raw_ds():
 @pytest.fixture(scope="session")
 def tok():
     ds = DatasetDict(
-        train=Dataset.from_dict({"text_en": [en for en, _ in PAIRS], "text_cy": [cy for _, cy in PAIRS]})
+        train=Dataset.from_dict(
+            {"text_en": [en for en, _ in PAIRS], "text_cy": [cy for _, cy in PAIRS]}
+        )
     )
     return tokenizer.create_tokenizer(ds, BASE_CONFIG["tokenizer"])
 

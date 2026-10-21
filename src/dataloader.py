@@ -1,12 +1,14 @@
+import random
 from collections.abc import Callable, Iterator
+from functools import partial
 from typing import Any
 
-from datasets import Dataset, DatasetDict
-from torch.utils.data import DataLoader
 import torch
+from torch.utils.data import DataLoader
 from torch.utils.data.sampler import BatchSampler
-import random
-from functools import partial
+
+from datasets import Dataset, DatasetDict
+
 
 class TokenSampler(BatchSampler):
     def __init__(self, ds: Dataset, token_batch_size: int, seed: int) -> None:
@@ -40,8 +42,7 @@ class TokenSampler(BatchSampler):
         rng = random.Random(self.seed)
         while True:
             batches = rng.sample(self.batches, len(self.batches))
-            for batch in batches:
-                yield batch
+            yield from batches
 
     def __len__(self) -> int:
         return len(self.batches)

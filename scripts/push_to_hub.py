@@ -1,15 +1,17 @@
-import sys
 import argparse
-import shutil
 import os
+import shutil
+import sys
+
 import yaml
 
 sys.path.insert(0, ".")
 
+from huggingface_hub import HfApi
+
 from src.hf_wrapper import EnCyForTranslation
 from src.tokenizer import load_tokenizer
 from src.utils import get_run_path
-from huggingface_hub import HfApi
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", required=True, help="Config name (e.g. base)")

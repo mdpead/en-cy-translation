@@ -3,8 +3,8 @@ from typing import Any
 
 import torch
 import torch.nn as nn
-from transformers import PretrainedConfig, PreTrainedModel, GenerationMixin
-from transformers.modeling_outputs import Seq2SeqLMOutput, BaseModelOutput
+from transformers import GenerationMixin, PretrainedConfig, PreTrainedModel
+from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 
 from src.model import Transformer
 
@@ -49,6 +49,7 @@ class EnCyConfig(PretrainedConfig):
 
 class _EncoderWrapper(torch.nn.Module):
     """Wrapper around transformer.encode() returning BaseModelOutput."""
+
     def __init__(self, transformer: Transformer) -> None:
         super().__init__()
         self._transformer = transformer
@@ -116,7 +117,9 @@ class EnCyForTranslation(PreTrainedModel, GenerationMixin):
         if decoder_attention_mask is not None:
             tgt_mask = decoder_attention_mask.bool()
         else:
-            tgt_mask = torch.ones(decoder_input_ids.shape, dtype=torch.bool, device=decoder_input_ids.device)
+            tgt_mask = torch.ones(
+                decoder_input_ids.shape, dtype=torch.bool, device=decoder_input_ids.device
+            )
 
         if encoder_outputs is None:
             enc = self.transformer.encode(input_ids, src_mask)
@@ -156,6 +159,7 @@ class EnCyForTranslation(PreTrainedModel, GenerationMixin):
     @classmethod
     def from_run(cls, run_path: str) -> "EnCyForTranslation":
         from src.utils import load_config
+
         config_dict = load_config(run_path)
         model_cfg = config_dict["model"]
         hf_config = EnCyConfig(

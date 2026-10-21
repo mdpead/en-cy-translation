@@ -1,11 +1,17 @@
-import os
-from tokenizers import Tokenizer
-from tokenizers import models, pre_tokenizers, trainers, processors
-from tokenizers import normalizers
-from tokenizers import decoders
-from transformers import PreTrainedTokenizerFast
 import itertools
+import os
 from typing import Any
+
+from tokenizers import (
+    Tokenizer,
+    decoders,
+    models,
+    normalizers,
+    pre_tokenizers,
+    processors,
+    trainers,
+)
+from transformers import PreTrainedTokenizerFast
 
 from datasets import DatasetDict
 from src import utils
@@ -13,9 +19,7 @@ from src import utils
 
 def create_tokenizer(ds: DatasetDict, tokenizer_config: dict[str, Any]) -> PreTrainedTokenizerFast:
     tokenizer = Tokenizer(models.WordPiece(unk_token="[UNK]"))
-    tokenizer.normalizer = normalizers.Sequence(
-        [normalizers.NFD(), normalizers.StripAccents()]
-    )
+    tokenizer.normalizer = normalizers.Sequence([normalizers.NFD(), normalizers.StripAccents()])
     tokenizer.pre_tokenizer = pre_tokenizers.WhitespaceSplit()
     special_tokens = ["[BOS]", "[EOS]", "[PAD]", "[MASK]", "[UNK]"]
     tokenizer.model = models.WordPiece(unk_token="[UNK]")

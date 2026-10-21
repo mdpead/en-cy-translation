@@ -43,9 +43,13 @@ def test_missing_attention_mask_attends_to_all_tokens(config, transformer):
     src = torch.randint(5, 50, (2, 6))
     tgt = torch.randint(5, 50, (2, 4))
 
-    expected = hf_model(input_ids=src, attention_mask=torch.ones_like(src), decoder_input_ids=tgt).logits
+    expected = hf_model(
+        input_ids=src, attention_mask=torch.ones_like(src), decoder_input_ids=tgt
+    ).logits
     from_ids = hf_model(input_ids=src, decoder_input_ids=tgt).logits
-    from_encoder = hf_model(encoder_outputs=hf_model.get_encoder()(src), decoder_input_ids=tgt).logits
+    from_encoder = hf_model(
+        encoder_outputs=hf_model.get_encoder()(src), decoder_input_ids=tgt
+    ).logits
 
     assert torch.allclose(from_ids, expected)
     assert torch.allclose(from_encoder, expected)
@@ -72,7 +76,12 @@ def test_loss_ignores_padding(config, transformer):
     labels_padded = labels.clone()
     labels_padded[0, 2:] = hf_model.config.pad_token_id
 
-    out = hf_model(input_ids=src, attention_mask=torch.ones_like(src), decoder_input_ids=tgt, labels=labels_padded)
+    out = hf_model(
+        input_ids=src,
+        attention_mask=torch.ones_like(src),
+        decoder_input_ids=tgt,
+        labels=labels_padded,
+    )
     expected = torch.nn.functional.cross_entropy(out.logits[0, :2], labels[0, :2])
 
     assert torch.allclose(out.loss, expected, atol=1e-5)
@@ -85,7 +94,11 @@ def test_generate_matches_greedy_generation(config, transformer, tok):
     expected = generation.generate_texts(transformer, tok, texts, 12, torch.device("cpu"))
     inputs = tok(texts, return_tensors="pt", padding=True)
     output_ids = hf_model.generate(
-        inputs["input_ids"], attention_mask=inputs["attention_mask"], max_length=12, do_sample=False, num_beams=1
+        inputs["input_ids"],
+        attention_mask=inputs["attention_mask"],
+        max_length=12,
+        do_sample=False,
+        num_beams=1,
     )
     actual = tok.batch_decode(output_ids, skip_special_tokens=True)
 
@@ -106,20 +119,24 @@ def assert_roundtrip(tmp_path, hf_model):
 def test_save_and_load_pretrained_default_max_length(tmp_path, config, transformer):
     config["model"]["max_length"] = EnCyConfig().max_length
     model_cfg = config["model"]
-    transformer.positional_encoder = type(transformer.positional_encoder)(model_cfg["d_model"], model_cfg["max_length"])
+    transformer.positional_encoder = type(transformer.positional_encoder)(
+        model_cfg["d_model"], model_cfg["max_length"]
+    )
     assert_roundtrip(tmp_path, make_hf_model(config, transformer))
 
 
 @pytest.mark.xfail(
     strict=True,
-    reason="save_pretrained moves a non-default max_length into generation_config.json, so it reloads as None",
+    reason="save_pretrained moves a non-default max_length into generation_config.json, "
+    "so it reloads as None",
 )
 def test_save_and_load_pretrained_custom_max_length(tmp_path, config, transformer):
     assert_roundtrip(tmp_path, make_hf_model(config, transformer))
 
 
 @pytest.mark.xfail(
-    strict=True, reason="README usage: the tokenizer returns token_type_ids, which generate() rejects"
+    strict=True,
+    reason="README usage: the tokenizer returns token_type_ids, which generate() rejects",
 )
 def test_generate_accepts_tokenizer_output(config, transformer, tok):
     hf_model = make_hf_model(config, transformer)

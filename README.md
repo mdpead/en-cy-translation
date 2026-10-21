@@ -20,6 +20,7 @@ A Transformer-based sequence-to-sequence model for English to Welsh translation,
 
 ```python
 from transformers import pipeline
+
 pipe = pipeline("translation", model="mdpead/en-cy-translation")
 pipe("Hello, how are you?")
 ```

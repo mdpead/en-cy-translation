@@ -1,8 +1,8 @@
-import os
 import json
 import logging
-import shutil
+import os
 import random
+import shutil
 from typing import Any
 
 import numpy as np
@@ -13,14 +13,30 @@ def get_run_path(config: dict[str, Any]) -> str:
     return f"{config['locations']['runs_dir']}/{config['name']}"
 
 
-RESUMABLE_KEYS = {"train": {"num_steps", "checkpoint_steps", "validation_steps", "validation_batches", "minibatch_token_size", "cache_clear_steps", "num_workers"}}
+RESUMABLE_KEYS = {
+    "train": {
+        "num_steps",
+        "checkpoint_steps",
+        "validation_steps",
+        "validation_batches",
+        "minibatch_token_size",
+        "cache_clear_steps",
+        "num_workers",
+    }
+}
 
 
 def _config_requires_restart(existing: dict[str, Any], current: dict[str, Any]) -> bool:
     for section, keys in RESUMABLE_KEYS.items():
         if section in existing and section in current:
-            existing = {**existing, section: {k: v for k, v in existing[section].items() if k not in keys}}
-            current = {**current, section: {k: v for k, v in current[section].items() if k not in keys}}
+            existing = {
+                **existing,
+                section: {k: v for k, v in existing[section].items() if k not in keys},
+            }
+            current = {
+                **current,
+                section: {k: v for k, v in current[section].items() if k not in keys},
+            }
     return existing != current
 
 

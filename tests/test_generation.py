@@ -68,7 +68,9 @@ def test_rejoins_split_apostrophes(tok):
 
 def test_input_too_long_raises(tok):
     with pytest.raises(ValueError, match="too long"):
-        generation.generate_texts(ScriptedModel([[1]], len(tok)), tok, ["Thank you very much"], 4, CPU)
+        generation.generate_texts(
+            ScriptedModel([[1]], len(tok)), tok, ["Thank you very much"], 4, CPU
+        )
 
 
 def test_restores_training_mode(tok, transformer):
