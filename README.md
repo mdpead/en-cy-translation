@@ -14,6 +14,8 @@ license: cc-by-4.0
 
 # English → Welsh Neural Machine Translation
 
+> **This project has moved to [mdpead/lab](https://github.com/mdpead/lab/tree/main/projects/en_cy_translation)**, under `projects/en_cy_translation`, with its full commit history. It now builds on `mlcore`, the shared library in that repo. This repository is no longer updated.
+
 [![CI](https://github.com/mdpead/en-cy-translation/actions/workflows/ci.yml/badge.svg)](https://github.com/mdpead/en-cy-translation/actions/workflows/ci.yml)
 
 A Transformer-based sequence-to-sequence model for English to Welsh translation, implemented from scratch in PyTorch. Full training code available at [github.com/mdpead/en-cy-translation](https://github.com/mdpead/en-cy-translation).
